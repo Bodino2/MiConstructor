@@ -1,187 +1,255 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'NextGen Logistics Driver',
+      title: 'NextGen Logistics',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.light),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Driver Location Tracker'),
+      home: const LoginPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-  String _locationStatus = 'Getting location...';
-  final String _backendUrl = 'http://10.0.2.2:3000/update-location';
-  final String _plateNumber = 'ABC-123'; // Change to actual truck plate number
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _startLocationTracking();
+  String get _loginUrl {
+    return 'http://192.168.1.141:3000/api/auth/login';
   }
 
-  void _startLocationTracking() async {
+  Future<void> _handleLogin() async {
+    setState(() => _isLoading = true);
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          _locationStatus = 'Location service is disabled.';
-        });
-        return;
-      }
+      final response = await http
+          .post(
+            Uri.parse(_loginUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': _emailController.text.trim(),
+              'password': _passwordController.text,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() {
-            _locationStatus = 'Location permissions are denied';
-          });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final token = data['access_token'] ?? data['token'];
+
+        if (token == null || (token is String && token.isEmpty)) {
+          _showError('Login reusit dar token lipsa');
           return;
         }
-      }
 
-      if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _locationStatus = 'Location permissions are permanently denied';
-        });
-        return;
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => TrackingPage(token: token as String)),
+          );
+        }
+      } else {
+        final body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final message = body['error'] ?? body['message'] ?? 'Login esuat';
+        _showError(message.toString());
       }
-
-      // Start continuous location updates
-      Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 10, // Update every 10 meters
-        ),
-      ).listen((Position position) {
-        _sendLocationToBackend();
-      });
     } catch (e) {
-      setState(() {
-        _locationStatus = 'Error: $e';
-      });
+      _showError('Eroare de conexiune: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _sendLocationToBackend() async {
-    // 1. CERE PERMISIUNEA (Aceasta va afișa pop-up-ul pe telefon)
-    LocationPermission permission = await Geolocator.requestPermission();
-
-    if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-      try {
-        // 2. IA LOCAȚIA REALĂ
-        Position position = await Geolocator.getCurrentPosition();
-        
-        // 3. TRIMITE LA SERVER (Folosim 10.0.2.2 acum că Firewall-ul e deschis)
-        final response = await http.post(
-          Uri.parse('http://10.0.2.2:3000/update-location'),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "plate_number": "B-123-NGX",
-            "lat": position.latitude,
-            "lng": position.longitude,
-          }),
-        );
-
-        setState(() {
-          _locationStatus = 'Serverul a răspuns cu succes: ${response.statusCode}';
-        });
-        print("Serverul a răspuns cu succes: ${response.statusCode}");
-      } catch (e) {
-        setState(() {
-          _locationStatus = 'Eroare la obținerea locației: $e';
-        });
-        print("Eroare la obținerea locației: $e");
-      }
-    } else {
-      setState(() {
-        _locationStatus = 'Utilizatorul a refuzat accesul la GPS.';
-      });
-      print("Utilizatorul a refuzat accesul la GPS.");
-    }
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Driver Location Tracker'),
-            const SizedBox(height: 20),
-            Text(
-              _locationStatus,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+            const Icon(Icons.local_shipping, size: 80, color: Colors.blue),
+            const SizedBox(height: 12),
+            const Text('NextGen Logistics', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 32),
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+              keyboardType: TextInputType.emailAddress,
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Button presses: $_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Parola', border: OutlineInputBorder()),
             ),
+            const SizedBox(height: 24),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                    onPressed: _handleLogin,
+                    child: const Text('Autentificare sofer'),
+                  ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _sendLocationToBackend,
-        tooltip: 'Send Location',
-        child: const Icon(Icons.location_on),
+    );
+  }
+}
+
+class TrackingPage extends StatefulWidget {
+  final String token;
+  const TrackingPage({super.key, required this.token});
+
+  @override
+  State<TrackingPage> createState() => _TrackingPageState();
+}
+
+class _TrackingPageState extends State<TrackingPage> {
+  String _locationStatus = 'GPS Ready';
+  bool _sending = false;
+  final String _plateNumber = 'ABC-123';
+
+  String get _backendUrl {
+    return 'http://192.168.1.141:3000/update-location';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ensurePermissions();
+  }
+
+  Future<void> _ensurePermissions() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _locationStatus = 'Location service is disabled');
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _locationStatus = 'Location permissions permanently denied');
+        return;
+      }
+
+      setState(() => _locationStatus = 'GPS ready. Tap to send location.');
+    } catch (e) {
+      setState(() => _locationStatus = 'Permission error: $e');
+    }
+  }
+
+  Future<void> _sendLocationToBackend() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
+      );
+
+      final response = await http.post(
+        Uri.parse(_backendUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
+        },
+        body: jsonEncode({
+          'plate_number': _plateNumber,
+          'lat': position.latitude,
+          'lng': position.longitude,
+        }),
+      );
+
+      setState(() {
+        _locationStatus = 'Locatie trimisa (status ${response.statusCode})\n'
+            'Lat: ${position.latitude.toStringAsFixed(4)} Lng: ${position.longitude.toStringAsFixed(4)}';
+      });
+    } catch (e) {
+      setState(() => _locationStatus = 'Error: $e');
+    } finally {
+      setState(() => _sending = false);
+    }
+  }
+
+  void _logout() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('NextGen Tracking'),
+        actions: [IconButton(onPressed: _logout, icon: const Icon(Icons.logout))],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Masina: $_plateNumber', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            Text(
+              _locationStatus,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const Spacer(),
+            ElevatedButton.icon(
+              onPressed: _sending ? null : _sendLocationToBackend,
+              icon: const Icon(Icons.location_on),
+              label: Text(_sending ? 'Se trimite...' : 'Trimite locatia'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
+            ),
+          ],
+        ),
       ),
     );
   }

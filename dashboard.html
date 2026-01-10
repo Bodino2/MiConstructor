@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NextGen Fleet Monitor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; width: 100%; border-radius: 10px; }
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+    </style>
+</head>
+<body>
+    <h1>🚚 Monitorizare Flotă în Timp Real</h1>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([44.4268, 26.1025], 12); // Centrat pe București
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        var markers = {};
+
+        async function updateMap() {
+            try {
+                const res = await fetch('http://localhost:3000/get-fleet');
+                const data = await res.json();
+                console.log("Datele primite:", data);
+                
+                data.forEach(truck => {
+                    if (markers[truck.plate_number]) {
+                        markers[truck.plate_number].setLatLng([truck.latitude, truck.longitude]);
+                    } else {
+                        markers[truck.plate_number] = L.marker([truck.latitude, truck.longitude])
+                            .addTo(map)
+                            .bindPopup("Camion: " + truck.plate_number + "<br>Lat: " + truck.latitude + "<br>Lng: " + truck.longitude);
+                    }
+                });
+                document.title = "📍 " + data.length + " camioane pe hartă";
+            } catch(error) {
+                console.error("Eroare:", error);
+            }
+        }
+
+        // Actualizează harta la fiecare 3 secunde
+        setInterval(updateMap, 3000);
+        updateMap();
+    </script>
+</body>
+</html>
