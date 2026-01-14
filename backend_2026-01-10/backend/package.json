@@ -1,0 +1,17 @@
+﻿{
+    "version":  "0.0.0",
+    "name":  "nextgen-auth-service",
+    "scripts":  {
+                    "migrate:auth":  "node auth-service/migrate.js",
+                    "start:auth":  "node auth-service.js"
+                },
+    "type":  "commonjs",
+    "dependencies":  {
+                         "dotenv":  "^16.4.5",
+                         "jsonwebtoken":  "^9.0.2",
+                         "express":  "^4.19.2",
+                         "bcrypt":  "^5.1.1",
+                         "pg":  "^8.11.5"
+                     },
+    "private":  true
+}
