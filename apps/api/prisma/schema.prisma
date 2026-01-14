@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  PRO
+  ADMIN
+}
+
+enum AccreditationStatus {
+  PENDING_TESTS
+  PENDING_REVIEW
+  ACCREDITED
+  SUSPENDED
+  REJECTED
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  CONTACT_LOCKED
+  IN_PROGRESS
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+enum LeadStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum GuaranteeStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum EscrowStatus {
+  PENDING
+  HELD
+  RELEASED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_RELEASE
+  CLOSED
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  CLOSED
+}
+
+enum Provider {
+  SIMULATED
+  STRIPE
+}
+
+enum ProType {
+  AUTONOMO
+  EMPRESA
+}
+
+enum DisputeOpener {
+  CLIENT
+  PRO
+  ADMIN
+}
+
+enum CorrectOption {
+  A
+  B
+  C
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+
+  clientProfile   ClientProfile?
+  proProfile      ProProfile?
+  leadPurchases   LeadPurchase[]
+  testAttempts    TestAttempt[]
+  sentMessages    Message[]
+  clientConversations Conversation[] @relation("ClientConversations")
+  proConversations    Conversation[] @relation("ProConversations")
+  clientJobs      Job[]          @relation("ClientJobs")
+  clientReviews   Review[]       @relation("ClientReviews")
+  proReviews      Review[]       @relation("ProReviews")
+  clientGuarantees GuaranteeCharge[] @relation("ClientGuarantees")
+  clientEscrows   EscrowPayment[] @relation("ClientEscrows")
+  proEscrows      EscrowPayment[] @relation("ProEscrows")
+}
+
+model ClientProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName   String
+  phone      String?
+  city       String
+  province   String
+  postalCode String
+  createdAt  DateTime @default(now())
+}
+
+model ProProfile {
+  id                    String              @id @default(uuid())
+  userId                String              @unique
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayNameOrCompany  String
+  proType               ProType
+  nifNieCif             String
+  categories            String[]
+  city                  String
+  province              String
+  postalCode            String
+  bio                   String?
+  accreditationStatus   AccreditationStatus @default(PENDING_TESTS)
+  testsPassed           Boolean             @default(false)
+  ratingAvg             Float               @default(0)
+  jobsCompleted         Int                 @default(0)
+  negativeReviewsCount  Int                 @default(0)
+  createdAt             DateTime            @default(now())
+}
+
+model Job {
+  id                  String        @id @default(uuid())
+  clientId            String
+  client              User          @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
+  title               String
+  description         String
+  category            String
+  city                String
+  province            String
+  postalCode          String
+  estimatedTotalCents Int
+  wantsGuarantee      Boolean       @default(false)
+  status              JobStatus     @default(DRAFT)
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+
+  leadPurchases   LeadPurchase[]
+  conversations   Conversation[]
+  guaranteeCharge GuaranteeCharge?
+  escrowPayment   EscrowPayment?
+  disputes        Dispute[]
+  reviews         Review[]
+}
+
+model LeadPurchase {
+  id          String     @id @default(uuid())
+  jobId       String
+  job         Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  proId       String
+  pro         User       @relation(fields: [proId], references: [id], onDelete: Cascade)
+  amountCents Int
+  status      LeadStatus @default(PENDING)
+  provider    Provider   @default(SIMULATED)
+  providerRef String?
+  createdAt   DateTime   @default(now())
+
+  @@unique([jobId, proId])
+}
+
+model Conversation {
+  id        String    @id @default(uuid())
+  jobId     String
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    User      @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
+  proId     String
+  pro       User      @relation("ProConversations", fields: [proId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  messages Message[]
+
+  @@unique([jobId, clientId, proId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String
+  createdAt      DateTime     @default(now())
+}
+
+model GuaranteeCharge {
+  id          String          @id @default(uuid())
+  jobId       String          @unique
+  job         Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      User            @relation("ClientGuarantees", fields: [clientId], references: [id], onDelete: Cascade)
+  amountCents Int
+  status      GuaranteeStatus @default(PENDING)
+  provider    Provider        @default(SIMULATED)
+  providerRef String?
+  createdAt   DateTime        @default(now())
+}
+
+model EscrowPayment {
+  id          String        @id @default(uuid())
+  jobId       String        @unique
+  job         Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      User          @relation("ClientEscrows", fields: [clientId], references: [id], onDelete: Cascade)
+  proId       String?
+  pro         User?         @relation("ProEscrows", fields: [proId], references: [id], onDelete: SetNull)
+  amountCents Int
+  status      EscrowStatus  @default(PENDING)
+  provider    Provider      @default(SIMULATED)
+  providerRef String?
+  heldAt      DateTime?
+  releasedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  disputes Dispute[]
+}
+
+model Dispute {
+  id               String         @id @default(uuid())
+  jobId            String
+  job              Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  escrowPaymentId  String
+  escrowPayment    EscrowPayment  @relation(fields: [escrowPaymentId], references: [id], onDelete: Cascade)
+  openedBy         DisputeOpener
+  reason           String
+  status           DisputeStatus  @default(OPEN)
+  createdAt        DateTime       @default(now())
+  resolvedAt       DateTime?
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    User     @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Cascade)
+  proId     String
+  pro       User     @relation("ProReviews", fields: [proId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, clientId])
+}
+
+model AdminAlert {
+  id             String      @id @default(uuid())
+  type           String
+  subjectType    String
+  subjectUserId  String
+  payload        Json
+  status         AlertStatus @default(OPEN)
+  createdAt      DateTime    @default(now())
+}
+
+model CategoryTest {
+  id        String   @id @default(uuid())
+  category  String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  questions    TestQuestion[]
+  testAttempts TestAttempt[]
+}
+
+model TestQuestion {
+  id            String        @id @default(uuid())
+  testId        String
+  test          CategoryTest  @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionText  String
+  optionA       String
+  optionB       String
+  optionC       String
+  correctOption CorrectOption
+  createdAt     DateTime      @default(now())
+}
+
+model TestAttempt {
+  id        String       @id @default(uuid())
+  proId     String
+  pro       User         @relation(fields: [proId], references: [id], onDelete: Cascade)
+  testId    String
+  test      CategoryTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  score     Int
+  passed    Boolean
+  createdAt DateTime     @default(now())
+}
