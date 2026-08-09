@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786267521470,
+      "tag": "0000_curly_sphinx",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786267542112,
+      "tag": "0001_stale_stingray",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786273863505,
+      "tag": "0002_reflective_lifeguard",
+      "breakpoints": true
+    }
+  ]
+}

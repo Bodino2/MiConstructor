@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `users_tax_id_idx` ON `users` (`tax_id`);
