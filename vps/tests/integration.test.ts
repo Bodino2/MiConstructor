@@ -105,7 +105,7 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
     title: "Renovación eléctrica completa",
     description: "Sustitución completa de cableado, cuadro, mecanismos y certificado final de la instalación.",
     category: "electricidad",
-    projectType: "reforma_integral",
+    projectType: "bano",
     location: "Linares, Jaén",
     squareMeters: 70,
     qualityLevel: "estandar",

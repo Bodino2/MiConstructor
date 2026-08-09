@@ -64,6 +64,8 @@ jobs:
           cache-dependency-path: vps/package-lock.json
       - run: npm ci
         working-directory: vps
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: vps
       - run: npm run check
         working-directory: vps
       - name: Assert no internal pricing leaks from the public app
