@@ -5,7 +5,10 @@ import {
   getPublicProfessionalAssessment,
   PROFESSIONAL_ASSESSMENT_VERSION,
 } from "../lib/professional-assessment.js";
-import { calculateShortlistFee } from "../lib/shortlist-pricing.js";
+import {
+  calculateShortlistFee,
+  getPublicShortlistBillingPolicy,
+} from "../lib/shortlist-pricing.js";
 import { estimateProjectPrice } from "../lib/project-estimator.js";
 import { billingAccountStateAfterCollection, previousWeeklyPeriod } from "../lib/weekly-billing.js";
 import { inspectSensitiveContactData } from "../lib/sensitive-data-filter.js";
@@ -68,6 +71,15 @@ test("la tarifa de shortlist aplica 5%, 4% o 3% al presupuesto estimado", () => 
   );
   assert.equal(calculateShortlistFee(2_000_000).feeCents, 60_000);
   assert.equal(calculateShortlistFee(0).valid, false);
+});
+
+test("la política pública no expone porcentajes ni coeficientes internos", () => {
+  const policy = getPublicShortlistBillingPolicy();
+  assert.equal(policy.frequency, "WEEKLY");
+  assert.equal(policy.collectionMethod, "SEPA_DIRECT_DEBIT");
+  assert.equal("tiers" in policy, false);
+  assert.equal("percentage" in policy, false);
+  assert.equal("rate" in policy, false);
 });
 
 test("el estimador devuelve rango y partidas que cuadran con el total", () => {
