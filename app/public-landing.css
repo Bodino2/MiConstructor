@@ -84,8 +84,10 @@
 }
 .public-header-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 34px; }
 .public-logo { display: inline-flex; align-items: center; flex: 0 0 auto; }
-.public-header nav { display: flex; align-items: center; gap: 31px; margin-left: auto; font-size: 12px; font-weight: 570; }
-.public-header nav a { position: relative; color: #46545d; }
+.public-header nav { display: flex; align-items: center; gap: 31px; margin-left: auto; font-size: 12px; font-weight: 650; }
+.public-header nav a { position: relative; color: #28363f; }
+.public-header nav a:hover,
+.public-header nav a:focus-visible { color: var(--public-steel-dark); }
 .public-header nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -8px; height: 2px; background: var(--public-brick); transition: right .2s ease; }
 .public-header nav a:hover::after { right: 0; }
 .public-header-actions { display: flex; align-items: center; gap: 8px; }
