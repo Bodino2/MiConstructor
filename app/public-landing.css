@@ -84,23 +84,27 @@
 }
 .public-header-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 34px; }
 .public-logo { display: inline-flex; align-items: center; flex: 0 0 auto; }
-.public-header nav { display: flex; align-items: center; gap: 31px; margin-left: auto; font-size: 12px; font-weight: 650; }
-.public-header nav a { position: relative; color: #28363f; }
-.public-header nav a:hover,
-.public-header nav a:focus-visible { color: var(--public-steel-dark); }
+.public-header nav { display: flex; align-items: center; gap: 31px; margin-left: auto; font-size: 12px; font-weight: 720; }
+.public-site .public-header nav > a:not(.public-button) { position: relative; color: #1a252c; }
+.public-site .public-header nav > a:not(.public-button):hover,
+.public-site .public-header nav > a:not(.public-button):focus-visible { color: #0d151a; }
 .public-header nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -8px; height: 2px; background: var(--public-brick); transition: right .2s ease; }
 .public-header nav a:hover::after { right: 0; }
 .public-header-actions { display: flex; align-items: center; gap: 8px; }
-.public-nav-demo {
+.public-site .public-header-actions .public-nav-demo {
   min-height: 42px;
   display: inline-flex;
   align-items: center;
   padding: 0 15px;
-  color: var(--public-steel);
-  border: 1px solid #cfd4d8;
+  color: #1a252c;
+  border: 1px solid #9ca6ad;
+  background: #eef0f2;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 760;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
 }
+.public-site .public-header-actions .public-nav-demo:hover,
+.public-site .public-header-actions .public-nav-demo:focus-visible { color: #fff; border-color: var(--public-steel); background: var(--public-steel); }
 .public-button {
   min-height: 42px;
   display: inline-flex;
@@ -120,8 +124,8 @@
 .public-button-primary { color: #fff; background: var(--public-brick); box-shadow: 0 12px 26px rgba(211,84,0,.16); }
 .public-button-primary:hover { background: var(--public-brick-dark); box-shadow: 0 16px 32px rgba(211,84,0,.24); }
 .public-button-large { min-height: 54px; padding: 0 24px; font-size: 12px; }
-.public-button-quiet { color: var(--public-steel); border-color: #bec5ca; background: rgba(255,255,255,.42); box-shadow: none; }
-.public-button-quiet:hover { border-color: var(--public-steel); background: #fff; }
+.public-site .public-button-quiet { color: #fff; border-color: var(--public-steel); background: var(--public-steel); box-shadow: 0 12px 24px rgba(44,62,80,.15); }
+.public-site .public-button-quiet:hover { color: #fff; border-color: var(--public-steel-dark); background: var(--public-steel-dark); box-shadow: 0 16px 30px rgba(26,37,44,.22); }
 .public-button-bronze { color: #17283c; background: #d5b24f; box-shadow: 0 13px 28px rgba(197,155,39,.2); }
 .public-button-bronze:hover { background: #e0bd59; }
 .public-button-outline-light { color: #fff; border-color: rgba(255,255,255,.34); background: transparent; }
