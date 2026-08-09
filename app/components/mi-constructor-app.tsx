@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { BrandMark as MiConstructorMark } from "./brand-logo";
 
 type NavKey = "resumen" | "proyectos" | "profesionales" | "mensajes";
 
@@ -77,10 +77,8 @@ const euros = new Intl.NumberFormat("es-ES", {
 
 function BrandMark() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <span />
-      <span />
-      <span />
+    <span className="brand-logo-mark" aria-hidden="true">
+      <MiConstructorMark />
     </span>
   );
 }
@@ -217,7 +215,6 @@ export default function MiConstructorApp() {
           </div>
           <b>•••</b>
         </button>
-        <Link className="back-public-site" href="/">← Volver al sitio público</Link>
       </aside>
 
       <main className="workspace">
