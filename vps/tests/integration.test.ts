@@ -107,7 +107,7 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
     category: "electricidad",
     projectType: "bano",
     location: "Linares, Jaén",
-    squareMeters: 70,
+    squareMeters: 10,
     qualityLevel: "estandar",
     budgetCents: 1_000_000,
   });
