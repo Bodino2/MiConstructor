@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./public-landing.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MiConstructor",
+  title: "MiConstructor | Reformas con control",
   description:
-    "Gestiona reformas, profesionales verificados y pagos por hitos desde un único lugar.",
+    "Propuestas comparables, profesionales verificados y control por hitos para gestionar una reforma con claridad de principio a fin.",
   other: {
     "codex-preview": "development",
   },
