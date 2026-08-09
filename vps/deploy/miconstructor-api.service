@@ -1,0 +1,32 @@
+[Unit]
+Description=MiConstructor production API and web app
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=miconstructor
+Group=miconstructor
+WorkingDirectory=/var/www/miconstructor/current/vps
+EnvironmentFile=/etc/miconstructor/api.env
+ExecStartPre=/usr/bin/node dist/src/migrate.js
+ExecStart=/usr/bin/node dist/src/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/miconstructor /var/log/miconstructor
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

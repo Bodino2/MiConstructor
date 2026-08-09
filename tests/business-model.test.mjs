@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   evaluateProfessionalAssessment,
+  getProfessionalSpecialties,
   getPublicProfessionalAssessment,
-  PROFESSIONAL_ASSESSMENT_VERSION,
 } from "../lib/professional-assessment.js";
 import {
   calculateShortlistFee,
@@ -13,44 +13,64 @@ import { estimateProjectPrice } from "../lib/project-estimator.js";
 import { billingAccountStateAfterCollection, previousWeeklyPeriod } from "../lib/weekly-billing.js";
 import { inspectSensitiveContactData } from "../lib/sensitive-data-filter.js";
 
-const correctAnswers = {
-  alcance: "b",
-  imprevisto: "b",
-  evidencia: "a",
-  liberacion: "b",
-  seguridad: "a",
-};
+const assessment = getPublicProfessionalAssessment("electricidad");
+const correctAnswers = Object.fromEntries(
+  assessment.questions.map((question, index) => [question.id, ["a", "b", "c"][index % 3]]),
+);
 
-test("el test profesional exige todas las respuestas y un mínimo del 80%", () => {
+test("el test profesional exige las 15 respuestas técnicas y un mínimo del 80%", () => {
   const passed = evaluateProfessionalAssessment({
-    version: PROFESSIONAL_ASSESSMENT_VERSION,
+    especialidad: "electricidad",
+    version: assessment.version,
     respuestas: correctAnswers,
   });
   assert.equal(passed.valid, true);
   assert.equal(passed.passed, true);
   assert.equal(passed.score, 100);
 
+  const failedAnswers = { ...correctAnswers };
+  assessment.questions.slice(0, 4).forEach((question, index) => {
+    failedAnswers[question.id] = ["b", "c", "a"][index % 3];
+  });
   const failed = evaluateProfessionalAssessment({
-    version: PROFESSIONAL_ASSESSMENT_VERSION,
-    respuestas: { ...correctAnswers, alcance: "a", imprevisto: "a" },
+    especialidad: "electricidad",
+    version: assessment.version,
+    respuestas: failedAnswers,
   });
   assert.equal(failed.valid, true);
   assert.equal(failed.passed, false);
-  assert.equal(failed.score, 60);
+  assert.equal(failed.score, 73);
 
   const incomplete = evaluateProfessionalAssessment({
-    version: PROFESSIONAL_ASSESSMENT_VERSION,
-    respuestas: { alcance: "b" },
+    especialidad: "electricidad",
+    version: assessment.version,
+    respuestas: { [assessment.questions[0].id]: "a" },
   });
   assert.equal(incomplete.valid, false);
   assert.equal(incomplete.passed, false);
 });
 
-test("la API pública del test no expone las respuestas correctas", () => {
-  const assessment = getPublicProfessionalAssessment();
-  assert.equal(assessment.passScore, 80);
-  assert.equal(assessment.questions.length, 5);
-  assert.equal("correctOption" in assessment.questions[0], false);
+test("cada oficio habilitado tiene un test propio de 15 preguntas sin respuestas expuestas", () => {
+  const specialties = getProfessionalSpecialties();
+  assert.equal(specialties.length, 6);
+  for (const specialty of specialties) {
+    const specialtyAssessment = getPublicProfessionalAssessment(specialty.slug);
+    assert.equal(specialtyAssessment.passScore, 80);
+    assert.equal(specialtyAssessment.specialty.slug, specialty.slug);
+    assert.equal(specialtyAssessment.questions.length, 15);
+    assert.equal(new Set(specialtyAssessment.questions.map((question) => question.id)).size, 15);
+    assert.equal("correctOption" in specialtyAssessment.questions[0], false);
+  }
+});
+
+test("aprobar un oficio no valida otro oficio", () => {
+  const result = evaluateProfessionalAssessment({
+    especialidad: "fontaneria",
+    version: assessment.version,
+    respuestas: correctAnswers,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.passed, false);
 });
 
 test("la tarifa de shortlist aplica 5%, 4% o 3% al presupuesto estimado", () => {

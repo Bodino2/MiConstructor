@@ -39,10 +39,21 @@ type AssessmentQuestion = {
 };
 
 type PublicAssessment = {
+  specialty: { slug: string; label: string };
   version: string;
   passScore: number;
+  questionCount: number;
   questions: AssessmentQuestion[];
 };
+
+const PROFESSIONAL_SPECIALTIES = [
+  { slug: "reformas_integrales", label: "Reformas integrales" },
+  { slug: "albanileria", label: "Albañilería" },
+  { slug: "electricidad", label: "Electricidad" },
+  { slug: "fontaneria", label: "Fontanería" },
+  { slug: "climatizacion", label: "Climatización" },
+  { slug: "pintura", label: "Pintura y revestimientos" },
+];
 
 const initialProjects: Project[] = [
   {
@@ -556,6 +567,7 @@ function ProfessionalDashboard({
 
 function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [selectedSpecialty, setSelectedSpecialty] = useState("reformas_integrales");
   const [assessment, setAssessment] = useState<PublicAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -563,7 +575,7 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/v1/evaluacion-profesional")
+    fetch(`/api/v1/evaluacion-profesional?especialidad=${encodeURIComponent(selectedSpecialty)}`)
       .then((response) => {
         if (!response.ok) throw new Error("No se ha podido cargar el test.");
         return response.json();
@@ -575,7 +587,7 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
         if (active) setError(fetchError.message);
       });
     return () => { active = false; };
-  }, []);
+  }, [selectedSpecialty]);
 
   async function submitAssessment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -592,7 +604,11 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
       const response = await fetch("/api/v1/evaluacion-profesional", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ version: assessment.version, respuestas }),
+        body: JSON.stringify({
+          especialidad: selectedSpecialty,
+          version: assessment.version,
+          respuestas,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se ha podido corregir el test.");
@@ -634,12 +650,12 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="form-grid">
                 <label>Teléfono profesional<input type="tel" required defaultValue="+34 600 000 000" /></label>
-                <label>Especialidad principal<select required defaultValue="Reformas integrales"><option>Reformas integrales</option><option>Albañilería</option><option>Electricidad</option><option>Fontanería</option><option>Climatización</option></select></label>
+                <label>Especialidad principal<select required value={selectedSpecialty} onChange={(event) => { setSelectedSpecialty(event.target.value); setAssessment(null); setError(""); }}>{PROFESSIONAL_SPECIALTIES.map((specialty) => <option key={specialty.slug} value={specialty.slug}>{specialty.label}</option>)}</select></label>
               </div>
               <div className="verification-checklist">
                 <span><b>01</b><strong>Datos profesionales</strong><small>Identidad, empresa y especialidad</small></span>
-                <span><b>02</b><strong>Test obligatorio</strong><small>Mínimo 80% de respuestas correctas</small></span>
-                <span><b>03</b><strong>Revisión MiConstructor</strong><small>Sin acceso a ofertas hasta la aprobación</small></span>
+                <span><b>02</b><strong>Test técnico por oficio</strong><small>15 preguntas de la especialidad elegida</small></span>
+                <span><b>03</b><strong>Aprobación por especialidad</strong><small>Solo permite aplicar a trabajos compatibles</small></span>
               </div>
               <button className="primary-button onboarding-submit" type="submit">Continuar al test <span>→</span></button>
               <p className="security-foot">Flujo demostrativo. No se guardan los datos introducidos.</p>
@@ -650,9 +666,9 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
         {step === 2 ? (
           <>
             <div className="onboarding-copy">
-              <span className="modal-kicker">EVALUACIÓN DE CONOCIMIENTOS</span>
-              <h2 id="professional-onboarding-title">Demuestra que conoces el proceso</h2>
-              <p>Debes responder todas las preguntas y obtener al menos {assessment?.passScore ?? 80}%.</p>
+              <span className="modal-kicker">EVALUACIÓN TÉCNICA POR ESPECIALIDAD</span>
+              <h2 id="professional-onboarding-title">Test de {assessment?.specialty.label ?? "tu oficio"}</h2>
+              <p>Son {assessment?.questionCount ?? 15} preguntas específicas del trabajo elegido. Debes responderlas todas y obtener al menos {assessment?.passScore ?? 80}%.</p>
             </div>
             <form className="assessment-form" onSubmit={submitAssessment}>
               {!assessment && !error ? <p className="assessment-loading">Preparando la evaluación…</p> : null}
@@ -680,13 +696,13 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
           <div className={`assessment-result ${result.passed ? "passed" : "failed"}`}>
             <span className="assessment-result-icon">{result.passed ? "✓" : "!"}</span>
             <span className="modal-kicker">RESULTADO DEL TEST</span>
-            <h2 id="professional-onboarding-title">{result.passed ? "Test aprobado" : "Todavía no está aprobado"}</h2>
+            <h2 id="professional-onboarding-title">{result.passed ? `${assessment?.specialty.label ?? "Especialidad"} aprobada` : "Todavía no está aprobado"}</h2>
             <strong>{result.score}%</strong>
             <p>{result.passed
-              ? "El siguiente paso obligatorio es autorizar la domiciliación bancaria semanal. Después, MiConstructor revisará la documentación y la especialidad antes de activar el perfil."
-              : "Es necesario alcanzar el 80%. Puedes repasar las respuestas y volver a realizar la evaluación antes de crear la cuenta profesional."}</p>
+              ? "Has superado las 15 preguntas de esta especialidad. El siguiente paso obligatorio es autorizar la domiciliación bancaria semanal; MiConstructor revisará después la documentación antes de activar este oficio."
+              : "Es necesario alcanzar el 80% en el test específico de esta especialidad. Puedes repasar el temario y volver a realizar la evaluación."}</p>
             <div className="verification-status-flow">
-              <span className="done"><b>1</b> Test aprobado</span>
+              <span className="done"><b>1</b> Oficio evaluado</span>
               <i />
               <span className={result.passed ? "active" : "locked"}><b>2</b> Revisión documental</span>
               <i />
@@ -697,7 +713,7 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
             ) : (
               <button className="primary-button onboarding-submit" type="button" onClick={() => { setResult(null); setStep(2); }}>Repetir el test</button>
             )}
-            <small>Sin test, revisión documental y mandato de domiciliación verificado, la cuenta no puede activarse.</small>
+            <small>Cada oficio adicional requiere su propio test y aprobación. Sin evaluación, revisión documental y mandato verificado, no puede usarse para aplicar a proyectos.</small>
           </div>
         ) : null}
 

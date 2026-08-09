@@ -36,7 +36,10 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 /dist/
+/vps/dist/
+/vps/uploads/
 /.wrangler/
 /.sites-runtime/
+/.npm-cache/
 /outputs/
 /work/

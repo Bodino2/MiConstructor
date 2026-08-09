@@ -40,6 +40,37 @@ export const users = sqliteTable(
   ],
 );
 
+export const professionalSpecialtyQualifications = sqliteTable(
+  "professional_specialty_qualifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    specialtySlug: text("specialty_slug").notNull(),
+    specialtyLabel: text("specialty_label").notNull(),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    assessmentVersion: text("assessment_version").notNull(),
+    questionCount: integer("question_count").notNull(),
+    score: integer("score").notNull(),
+    passedAt: text("passed_at").notNull(),
+    verificationStatus: text("verification_status", {
+      enum: ["PENDIENTE_REVISION", "APROBADO", "RECHAZADO", "SUSPENDIDO"],
+    })
+      .notNull()
+      .default("PENDIENTE_REVISION"),
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+    reviewReason: text("review_reason"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("professional_specialty_qualifications_unique_idx").on(
+      table.professionalEmail,
+      table.specialtySlug,
+    ),
+  ],
+);
+
 export const projects = sqliteTable(
   "projects",
   {

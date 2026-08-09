@@ -7,7 +7,7 @@ import {
 } from "@/lib/validation";
 import {
   evaluateProfessionalAssessment,
-  PROFESSIONAL_ASSESSMENT_VERSION,
+  normalizeProfessionalSpecialty,
 } from "@/lib/professional-assessment";
 
 type RegistrationPayload = {
@@ -81,7 +81,8 @@ export async function POST(request: Request) {
       .replace(/[\s-]/g, "");
     const empresa = cleanText(payload.empresa, 120);
     const telefono = cleanText(payload.telefono, 30);
-    const especialidad = cleanText(payload.especialidad, 80);
+    const especialidadSolicitada = cleanText(payload.especialidad, 80);
+    const especialidadSlug = normalizeProfessionalSpecialty(especialidadSolicitada);
 
     if (!nombre || !email || !tipo || !cifDni) {
       return Response.json(
@@ -119,15 +120,28 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (tipo === "profesional" && (!empresa || !especialidad || !telefono)) {
+    if (tipo === "profesional" && (!empresa || !especialidadSolicitada || !telefono)) {
       return Response.json(
         { error: "La razón social, la especialidad y el teléfono son obligatorios para profesionales." },
         { status: 400 },
       );
     }
+    if (tipo === "profesional" && !especialidadSlug) {
+      return Response.json(
+        { error: "La especialidad seleccionada todavía no dispone de una evaluación técnica habilitada." },
+        { status: 400 },
+      );
+    }
 
+    const assessmentPayload = payload.evaluacionConocimientos &&
+      typeof payload.evaluacionConocimientos === "object"
+      ? (payload.evaluacionConocimientos as Record<string, unknown>)
+      : {};
     const assessment = tipo === "profesional"
-      ? evaluateProfessionalAssessment(payload.evaluacionConocimientos)
+      ? evaluateProfessionalAssessment({
+          ...assessmentPayload,
+          especialidad: especialidadSlug,
+        })
       : null;
     if (assessment && !assessment.valid) {
       return Response.json(
@@ -159,15 +173,14 @@ export async function POST(request: Request) {
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    await db
-      .prepare(
-        `INSERT INTO users
+    const userInsert = db.prepare(
+      `INSERT INTO users
           (id, email, name, role, tax_id, company_name, phone, professional_specialty,
            verification_status, knowledge_assessment_version,
            knowledge_assessment_score, knowledge_assessment_passed_at,
            privacy_version, privacy_accepted_at, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?14)`,
-      )
+    )
       .bind(
         id,
         email,
@@ -176,26 +189,40 @@ export async function POST(request: Request) {
         cifDni,
         empresa || null,
         telefono || null,
-        especialidad || null,
+        assessment?.specialtyLabel ?? null,
         tipo === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
-        assessment ? PROFESSIONAL_ASSESSMENT_VERSION : null,
+        assessment?.version ?? null,
         assessment?.score ?? null,
         assessment ? now : null,
         "2026-08-09",
         now,
-      )
-      .run();
+      );
 
     if (tipo === "profesional") {
-      await db
-        .prepare(
+      const billingInsert = db.prepare(
           `INSERT INTO professional_billing_accounts
             (professional_email, status, payment_provider,
              unbilled_balance_cents, overdue_balance_cents, created_at, updated_at)
            VALUES (?1, 'PENDIENTE_MANDATO', 'STRIPE', 0, 0, ?2, ?2)`,
-        )
-        .bind(email, now)
-        .run();
+        ).bind(email, now);
+      const specialtyInsert = db.prepare(
+        `INSERT INTO professional_specialty_qualifications
+          (professional_email, specialty_slug, specialty_label, is_primary,
+           assessment_version, question_count, score, passed_at,
+           verification_status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, 'PENDIENTE_REVISION', ?7, ?7)`,
+      ).bind(
+        email,
+        assessment?.specialtySlug,
+        assessment?.specialtyLabel,
+        assessment?.version,
+        assessment?.total,
+        assessment?.score,
+        now,
+      );
+      await db.batch([userInsert, billingInsert, specialtyInsert]);
+    } else {
+      await userInsert.run();
     }
 
     return Response.json(
@@ -210,6 +237,9 @@ export async function POST(request: Request) {
           tipo,
           estadoVerificacion: tipo === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
           puntuacionConocimientos: assessment?.score ?? null,
+          especialidad: assessment?.specialtyLabel ?? null,
+          especialidadSlug: assessment?.specialtySlug ?? null,
+          preguntasEvaluadas: assessment?.total ?? null,
           domiciliacionObligatoria: tipo === "profesional",
         },
       },

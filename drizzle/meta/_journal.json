@@ -29,6 +29,13 @@
       "when": 1786284326770,
       "tag": "0003_workable_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786286752597,
+      "tag": "0004_pretty_thanos",
+      "breakpoints": true
     }
   ]
 }

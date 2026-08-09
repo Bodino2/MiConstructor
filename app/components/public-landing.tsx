@@ -22,7 +22,7 @@ const processSteps: Array<{
     number: "02",
     icon: "compare",
     title: "Compara con criterio",
-    copy: "Analiza propuestas de profesionales evaluados y verificados por precio, calendario, especialidad y documentación disponible.",
+    copy: "Analiza propuestas de profesionales evaluados con un test técnico específico de su oficio y verificados por especialidad y documentación.",
     detail: "Decisión informada",
   },
   {
@@ -120,7 +120,7 @@ export default function PublicLanding() {
                 </Link>
               </div>
               <div className="public-hero-assurance">
-                <span><b>01</b> Test y perfil verificados</span>
+                <span><b>01</b> Test técnico de 15 preguntas por oficio</span>
                 <span><b>02</b> Control por hitos</span>
                 <span><b>03</b> Evidencias centralizadas</span>
               </div>
@@ -225,7 +225,7 @@ export default function PublicLanding() {
               <p>El alta y la consulta de proyectos son gratuitas. El profesional solo paga cuando un cliente lo selecciona para su shortlist y se desbloquean los datos de contacto.</p>
               <div className="public-pro-points">
                 <span><b>01</b> Test de conocimientos obligatorio al crear la cuenta</span>
-                <span><b>02</b> Documentación y especialidad revisadas antes de activar el perfil</span>
+                <span><b>02</b> Cada especialidad se evalúa y aprueba por separado antes de activarse</span>
                 <span><b>03</b> Sin suscripción; pago solo al ser seleccionado por un cliente</span>
               </div>
               <Link className="public-button public-button-bronze" href="/demo?registro=profesional">Crear cuenta profesional <span>↗</span></Link>

@@ -1,5 +1,6 @@
 import { databaseError, getD1 } from "@/lib/server/d1";
 import { requireIdentity } from "@/lib/server/identity";
+import { getSpecialtySlugForProjectCategory } from "@/lib/professional-assessment";
 import { cleanText, toCents } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -75,13 +76,37 @@ export async function POST(request: Request) {
       );
     }
     const project = await db
-      .prepare("SELECT status FROM projects WHERE id = ?1")
+      .prepare("SELECT status, category FROM projects WHERE id = ?1")
       .bind(projectId)
-      .first<{ status: string }>();
+      .first<{ status: string; category: string }>();
     if (!project || project.status !== "PUBLICADO") {
       return Response.json(
         { error: "El proyecto no está disponible para nuevas propuestas." },
         { status: 409 },
+      );
+    }
+    const requiredSpecialty = getSpecialtySlugForProjectCategory(project.category);
+    if (!requiredSpecialty) {
+      return Response.json(
+        { error: "Este proyecto todavía no tiene una especialidad técnica configurada." },
+        { status: 409 },
+      );
+    }
+    const qualification = await db
+      .prepare(
+        `SELECT verification_status
+           FROM professional_specialty_qualifications
+          WHERE professional_email = ?1 AND specialty_slug = ?2`,
+      )
+      .bind(identity, requiredSpecialty)
+      .first<{ verification_status: string }>();
+    if (!qualification || qualification.verification_status !== "APROBADO") {
+      return Response.json(
+        {
+          error:
+            "Para enviar una propuesta debes aprobar el test y la revisión de la especialidad correspondiente a este proyecto.",
+        },
+        { status: 403 },
       );
     }
 

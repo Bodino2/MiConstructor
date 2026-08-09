@@ -1,10 +1,29 @@
 import {
   evaluateProfessionalAssessment,
+  getProfessionalSpecialties,
   getPublicProfessionalAssessment,
 } from "@/lib/professional-assessment";
 
-export async function GET() {
-  return Response.json({ success: true, data: getPublicProfessionalAssessment() });
+export async function GET(request: Request) {
+  const specialty = new URL(request.url).searchParams.get("especialidad");
+  const assessment = getPublicProfessionalAssessment(specialty);
+
+  if (!assessment) {
+    return Response.json(
+      {
+        success: false,
+        error: "Selecciona una especialidad profesional válida.",
+        data: { especialidades: getProfessionalSpecialties() },
+      },
+      { status: 400 },
+    );
+  }
+
+  return Response.json({
+    success: true,
+    data: assessment,
+    especialidades: getProfessionalSpecialties(),
+  });
 }
 
 export async function POST(request: Request) {
