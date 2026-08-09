@@ -10,6 +10,25 @@ export const users = sqliteTable(
     role: text("role", { enum: ["cliente", "profesional"] }).notNull(),
     taxId: text("tax_id").notNull(),
     companyName: text("company_name"),
+    phone: text("phone"),
+    professionalSpecialty: text("professional_specialty"),
+    verificationStatus: text("verification_status", {
+      enum: [
+        "NO_APLICA",
+        "PENDIENTE_REVISION",
+        "APROBADO",
+        "RECHAZADO",
+        "SUSPENDIDO",
+      ],
+    })
+      .notNull()
+      .default("NO_APLICA"),
+    knowledgeAssessmentVersion: text("knowledge_assessment_version"),
+    knowledgeAssessmentScore: integer("knowledge_assessment_score"),
+    knowledgeAssessmentPassedAt: text("knowledge_assessment_passed_at"),
+    verificationReviewedAt: text("verification_reviewed_at"),
+    verificationReviewedBy: text("verification_reviewed_by"),
+    verificationReason: text("verification_reason"),
     privacyVersion: text("privacy_version").notNull().default("2026-08-09"),
     privacyAcceptedAt: text("privacy_accepted_at").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -32,30 +51,10 @@ export const projects = sqliteTable(
     location: text("location").notNull(),
     budgetCents: integer("budget_cents").notNull(),
     status: text("status", {
-      enum: ["BORRADOR", "PUBLICADO", "IN_PROGRESS", "COMPLETED", "RELEASED", "CANCELADO"],
+      enum: ["BORRADOR", "PUBLICADO", "EN_CURSO", "FINALIZADO", "CANCELADO"],
     })
       .notNull()
       .default("PUBLICADO"),
-    requiresGuarantee: integer("requires_guarantee", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    guaranteeChargeStatus: text("guarantee_charge_status", {
-      enum: ["NOT_REQUIRED", "PENDING", "PAID", "FAILED"],
-    })
-      .notNull()
-      .default("NOT_REQUIRED"),
-    escrowStatus: text("escrow_status", {
-      enum: ["PENDING", "HELD", "RELEASED", "REFUNDED"],
-    })
-      .notNull()
-      .default("PENDING"),
-    escrowHeldAt: text("escrow_held_at"),
-    completedAt: text("completed_at"),
-    autoReleaseAt: text("auto_release_at"),
-    disputeOpen: integer("dispute_open", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    releasedAt: text("released_at"),
     assignedProfessionalEmail: text("assigned_professional_email"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -78,7 +77,7 @@ export const milestones = sqliteTable(
       enum: ["PREVISTO", "RETENIDO", "EN_REVISION", "LIBERADO", "DISPUTADO"],
     })
       .notNull()
-      .default("PREVISTO"),
+      .default("RETENIDO"),
     dueDate: text("due_date"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -122,5 +121,62 @@ export const events = sqliteTable("events", {
   actorEmail: text("actor_email").notNull(),
   type: text("type").notNull(),
   message: text("message").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const professionalCreditAccounts = sqliteTable("professional_credit_accounts", {
+  professionalEmail: text("professional_email").primaryKey(),
+  balanceCents: integer("balance_cents").notNull().default(0),
+  autoChargeEnabled: integer("auto_charge_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  paymentCustomerRef: text("payment_customer_ref"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const projectShortlists = sqliteTable(
+  "project_shortlists",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull(),
+    clientEmail: text("client_email").notNull(),
+    professionalEmail: text("professional_email").notNull(),
+    projectBudgetCents: integer("project_budget_cents").notNull(),
+    feeCents: integer("fee_cents").notNull(),
+    pricingVersion: text("pricing_version").notNull(),
+    chargeMethod: text("charge_method", { enum: ["CREDITS", "STRIPE"] }),
+    paymentStatus: text("payment_status", {
+      enum: ["PENDIENTE", "PAGADO", "FALLIDO", "REEMBOLSADO"],
+    })
+      .notNull()
+      .default("PENDIENTE"),
+    paymentProviderRef: text("payment_provider_ref"),
+    contactUnlockedAt: text("contact_unlocked_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("project_shortlists_project_professional_idx").on(
+      table.projectId,
+      table.professionalEmail,
+    ),
+  ],
+);
+
+export const creditTransactions = sqliteTable("credit_transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  professionalEmail: text("professional_email").notNull(),
+  shortlistId: integer("shortlist_id"),
+  type: text("type", {
+    enum: ["COMPRA_CREDITOS", "CARGO_SHORTLIST", "REEMBOLSO"],
+  }).notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  status: text("status", {
+    enum: ["PENDIENTE", "COMPLETADO", "FALLIDO"],
+  })
+    .notNull()
+    .default("COMPLETADO"),
+  paymentProvider: text("payment_provider"),
+  paymentProviderRef: text("payment_provider_ref"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

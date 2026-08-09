@@ -35,12 +35,16 @@ export async function POST(request: Request) {
 
     const db = getD1();
     const profile = await db
-      .prepare("SELECT role FROM users WHERE email = ?1")
+      .prepare("SELECT role, verification_status FROM users WHERE email = ?1")
       .bind(identity)
-      .first<{ role: string }>();
-    if (!profile || profile.role !== "profesional") {
+      .first<{ role: string; verification_status: string }>();
+    if (
+      !profile ||
+      profile.role !== "profesional" ||
+      profile.verification_status !== "APROBADO"
+    ) {
       return Response.json(
-        { error: "Solo los profesionales verificados pueden enviar propuestas." },
+        { error: "Solo los profesionales con test, documentación y perfil aprobados pueden enviar propuestas." },
         { status: 403 },
       );
     }

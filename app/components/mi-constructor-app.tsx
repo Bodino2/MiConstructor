@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BrandMark as MiConstructorMark } from "./brand-logo";
 
 type NavKey = "resumen" | "proyectos" | "profesionales" | "mensajes";
@@ -25,6 +25,18 @@ type Profile = {
   tipo: "cliente" | "profesional";
   empresa?: string | null;
   cifDniEnmascarado: string;
+};
+
+type AssessmentQuestion = {
+  id: string;
+  prompt: string;
+  options: Array<{ id: string; label: string }>;
+};
+
+type PublicAssessment = {
+  version: string;
+  passScore: number;
+  questions: AssessmentQuestion[];
 };
 
 const initialProjects: Project[] = [
@@ -94,8 +106,20 @@ export default function MiConstructorApp() {
   const [formError, setFormError] = useState("");
   const [budgetDraft, setBudgetDraft] = useState(25000);
   const [proposalProjectId, setProposalProjectId] = useState<number | null>(null);
+  const [professionalOnboardingOpen, setProfessionalOnboardingOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("registro") === "profesional") {
+      const frame = window.requestAnimationFrame(() => {
+        setProfile((current) => ({ ...current, tipo: "profesional" }));
+        setProfessionalOnboardingOpen(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, []);
 
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ?? projects[0];
@@ -153,6 +177,13 @@ export default function MiConstructorApp() {
     setActiveNav("resumen");
     setMobileNav(false);
     notify(nextRole === "cliente" ? "Vista de cliente activada." : "Vista de profesional activada.");
+  }
+
+  function closeProfessionalOnboarding() {
+    setProfessionalOnboardingOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("registro");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
   const navItems: Array<{ key: NavKey; label: string; glyph: string; badge?: string }> = [
@@ -252,7 +283,11 @@ export default function MiConstructorApp() {
 
           {activeNav === "resumen" ? (
             profile?.tipo === "profesional" ? (
-              <ProfessionalDashboard projects={projects} onPropose={setProposalProjectId} />
+              <ProfessionalDashboard
+                projects={projects}
+                onPropose={setProposalProjectId}
+                onShowVerification={() => setProfessionalOnboardingOpen(true)}
+              />
             ) : activeProject ? (
               <DashboardView
                 project={activeProject}
@@ -266,7 +301,12 @@ export default function MiConstructorApp() {
             )
           ) : activeNav === "proyectos" ? (
             profile?.tipo === "profesional" ? (
-              <ProfessionalDashboard projects={projects} onPropose={setProposalProjectId} expanded />
+              <ProfessionalDashboard
+                projects={projects}
+                onPropose={setProposalProjectId}
+                onShowVerification={() => setProfessionalOnboardingOpen(true)}
+                expanded
+              />
             ) : (
               <ProjectsView projects={projects} onCreate={() => setCreateOpen(true)} onSelect={(id) => { setActiveProjectId(id); setActiveNav("resumen"); }} />
             )
@@ -352,6 +392,10 @@ export default function MiConstructorApp() {
         />
       ) : null}
 
+      {professionalOnboardingOpen ? (
+        <ProfessionalOnboardingModal onClose={closeProfessionalOnboarding} />
+      ) : null}
+
       {toast ? <div className="toast" role="status"><span>✓</span>{toast}</div> : null}
       {mobileNav ? <button className="mobile-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} /> : null}
     </div>
@@ -394,10 +438,12 @@ function EmptyProjects({ onCreate }: { onCreate: () => void }) {
 function ProfessionalDashboard({
   projects,
   onPropose,
+  onShowVerification,
   expanded = false,
 }: {
   projects: Project[];
   onPropose: (id: number) => void;
+  onShowVerification: () => void;
   expanded?: boolean;
 }) {
   return (
@@ -408,7 +454,10 @@ function ProfessionalDashboard({
           <h2>{expanded ? "Proyectos disponibles" : "Trabajos que encajan contigo"}</h2>
           <p>Clientes identificados, alcance definido y presupuesto protegido por hitos.</p>
         </div>
-        <div className="market-score"><strong>92%</strong><span>compatibilidad media</span></div>
+        <div className="market-hero-actions">
+          <div className="market-score"><strong>92%</strong><span>compatibilidad media</span></div>
+          <button type="button" onClick={onShowVerification}>Ver alta y test profesional</button>
+        </div>
       </div>
       <div className="market-filters">
         <button className="active">Todos</button><button>Reforma integral</button><button>Cocinas</button><button>Madrid</button>
@@ -427,7 +476,7 @@ function ProfessionalDashboard({
               <div className="opportunity-offer">
                 <small>PRESUPUESTO DEL CLIENTE</small>
                 <strong>{euros.format(project.budget)}</strong>
-                <p>Fondos por hitos · Sin comisión en esta demo</p>
+                <p>Ver el proyecto es gratis · Sin comisión sobre la obra</p>
                 <button className="primary-button" onClick={() => onPropose(project.id)}>Enviar propuesta →</button>
               </div>
             </article>
@@ -437,6 +486,157 @@ function ProfessionalDashboard({
         <div className="market-empty panel"><span>⌕</span><h3>No hay obras abiertas ahora mismo</h3><p>Te avisaremos cuando aparezca un proyecto compatible.</p></div>
       )}
     </section>
+  );
+}
+
+function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [assessment, setAssessment] = useState<PublicAssessment | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<{ passed: boolean; score: number } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/v1/evaluacion-profesional")
+      .then((response) => {
+        if (!response.ok) throw new Error("No se ha podido cargar el test.");
+        return response.json();
+      })
+      .then((payload) => {
+        if (active) setAssessment(payload.data as PublicAssessment);
+      })
+      .catch((fetchError: Error) => {
+        if (active) setError(fetchError.message);
+      });
+    return () => { active = false; };
+  }, []);
+
+  async function submitAssessment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!assessment) return;
+
+    const formData = new FormData(event.currentTarget);
+    const respuestas = Object.fromEntries(
+      assessment.questions.map((question) => [question.id, String(formData.get(question.id) || "")]),
+    );
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/v1/evaluacion-profesional", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: assessment.version, respuestas }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "No se ha podido corregir el test.");
+      setResult({ passed: Boolean(payload.data.passed), score: Number(payload.data.score) });
+      setStep(3);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "No se ha podido corregir el test.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop onboarding-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal onboarding-modal professional-onboarding" role="dialog" aria-modal="true" aria-labelledby="professional-onboarding-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="onboarding-brand">
+          <BrandMark />
+          <strong>MiConstructor</strong>
+          <span>ALTA PROFESIONAL · PASO {step} DE 3</span>
+          <button type="button" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <div className="onboarding-progress" aria-label={`Paso ${step} de 3`}><i style={{ width: `${(step / 3) * 100}%` }} /></div>
+
+        {step === 1 ? (
+          <>
+            <div className="onboarding-copy">
+              <span className="modal-kicker">PERFIL Y ESPECIALIDAD</span>
+              <h2 id="professional-onboarding-title">La verificación empieza al crear la cuenta</h2>
+              <p>El acceso profesional exige identidad, especialidad, test de conocimientos y revisión final.</p>
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); setStep(2); }}>
+              <div className="form-grid">
+                <label>Nombre y apellidos<input required defaultValue="Carlos Romero" /></label>
+                <label>Email profesional<input type="email" required defaultValue="carlos@reformasromero.es" /></label>
+              </div>
+              <div className="form-grid">
+                <label>Empresa o razón social<input required defaultValue="Reformas Romero SL" /></label>
+                <label>NIF / CIF<input required defaultValue="B12345678" /></label>
+              </div>
+              <div className="form-grid">
+                <label>Teléfono profesional<input type="tel" required defaultValue="+34 600 000 000" /></label>
+                <label>Especialidad principal<select required defaultValue="Reformas integrales"><option>Reformas integrales</option><option>Albañilería</option><option>Electricidad</option><option>Fontanería</option><option>Climatización</option></select></label>
+              </div>
+              <div className="verification-checklist">
+                <span><b>01</b><strong>Datos profesionales</strong><small>Identidad, empresa y especialidad</small></span>
+                <span><b>02</b><strong>Test obligatorio</strong><small>Mínimo 80% de respuestas correctas</small></span>
+                <span><b>03</b><strong>Revisión MiConstructor</strong><small>Sin acceso a ofertas hasta la aprobación</small></span>
+              </div>
+              <button className="primary-button onboarding-submit" type="submit">Continuar al test <span>→</span></button>
+              <p className="security-foot">Flujo demostrativo. No se guardan los datos introducidos.</p>
+            </form>
+          </>
+        ) : null}
+
+        {step === 2 ? (
+          <>
+            <div className="onboarding-copy">
+              <span className="modal-kicker">EVALUACIÓN DE CONOCIMIENTOS</span>
+              <h2 id="professional-onboarding-title">Demuestra que conoces el proceso</h2>
+              <p>Debes responder todas las preguntas y obtener al menos {assessment?.passScore ?? 80}%.</p>
+            </div>
+            <form className="assessment-form" onSubmit={submitAssessment}>
+              {!assessment && !error ? <p className="assessment-loading">Preparando la evaluación…</p> : null}
+              {assessment?.questions.map((question, index) => (
+                <fieldset className="assessment-question" key={question.id}>
+                  <legend><b>{String(index + 1).padStart(2, "0")}</b>{question.prompt}</legend>
+                  {question.options.map((option) => (
+                    <label key={option.id}>
+                      <input type="radio" name={question.id} value={option.id} required />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+              {error ? <p className="form-error standalone">{error}</p> : null}
+              <div className="modal-actions">
+                <button className="secondary-button" type="button" onClick={() => setStep(1)}>Atrás</button>
+                <button className="primary-button" type="submit" disabled={!assessment || loading}>{loading ? "Corrigiendo…" : "Finalizar evaluación →"}</button>
+              </div>
+            </form>
+          </>
+        ) : null}
+
+        {step === 3 && result ? (
+          <div className={`assessment-result ${result.passed ? "passed" : "failed"}`}>
+            <span className="assessment-result-icon">{result.passed ? "✓" : "!"}</span>
+            <span className="modal-kicker">RESULTADO DEL TEST</span>
+            <h2 id="professional-onboarding-title">{result.passed ? "Test aprobado" : "Todavía no está aprobado"}</h2>
+            <strong>{result.score}%</strong>
+            <p>{result.passed
+              ? "La cuenta se crea con estado «Pendiente de revisión». MiConstructor comprobará la documentación y la especialidad antes de activar el perfil profesional."
+              : "Es necesario alcanzar el 80%. Puedes repasar las respuestas y volver a realizar la evaluación antes de crear la cuenta profesional."}</p>
+            <div className="verification-status-flow">
+              <span className="done"><b>1</b> Test aprobado</span>
+              <i />
+              <span className={result.passed ? "active" : "locked"}><b>2</b> Revisión documental</span>
+              <i />
+              <span className="locked"><b>3</b> Cuenta activa</span>
+            </div>
+            {result.passed ? (
+              <button className="primary-button onboarding-submit" type="button" onClick={onClose}>Entendido, finalizar demo</button>
+            ) : (
+              <button className="primary-button onboarding-submit" type="button" onClick={() => { setResult(null); setStep(2); }}>Repetir el test</button>
+            )}
+            <small>Hasta la aprobación final no se pueden enviar propuestas ni mostrar la insignia «Profesional verificado».</small>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -611,11 +811,11 @@ function ProfessionalsView({ onNotify }: { onNotify: (message: string) => void }
   ];
   return (
     <section className="listing-view">
-      <div className="section-title"><div><span>RED VERIFICADA</span><h1>Profesionales</h1><p>Compara experiencia, valoraciones y especialidades.</p></div><button className="secondary-button" onClick={() => onNotify("Filtros activados.")}>Filtros</button></div>
+      <div className="section-title"><div><span>RED VERIFICADA</span><h1>Profesionales</h1><p>Compara gratis. El contacto se desbloquea al añadir un profesional a tu shortlist.</p></div><button className="secondary-button" onClick={() => onNotify("Filtros activados.")}>Filtros</button></div>
       <div className="professional-grid">
         {professionals.map(([avatar, name, specialty, rating, area]) => (
           <article className="panel directory-card" key={name}>
-            <div className="directory-avatar">{avatar}<i>✓</i></div><small>PROFESIONAL VERIFICADO</small><h2>{name}</h2><p>{specialty}</p><div><span>★ {rating}</span><span>◎ {area}</span></div><button onClick={() => onNotify(`Perfil de ${name} abierto.`)}>Ver perfil completo</button>
+            <div className="directory-avatar">{avatar}<i>✓</i></div><small>TEST Y PERFIL APROBADOS</small><h2>{name}</h2><p>{specialty}</p><div><span>★ {rating}</span><span>◎ {area}</span></div><button onClick={() => onNotify(`${name} añadido a la shortlist. En producción, el contacto se desbloquea después de cobrar la tarifa al profesional.`)}>Añadir a shortlist</button>
           </article>
         ))}
       </div>

@@ -5,6 +5,10 @@ import {
   isValidEmail,
   isValidSpanishTaxId,
 } from "@/lib/validation";
+import {
+  evaluateProfessionalAssessment,
+  PROFESSIONAL_ASSESSMENT_VERSION,
+} from "@/lib/professional-assessment";
 
 type RegistrationPayload = {
   nombre?: unknown;
@@ -12,6 +16,9 @@ type RegistrationPayload = {
   tipo?: unknown;
   cifDni?: unknown;
   empresa?: unknown;
+  telefono?: unknown;
+  especialidad?: unknown;
+  evaluacionConocimientos?: unknown;
   aceptaRGPD?: unknown;
 };
 
@@ -23,6 +30,10 @@ function publicUser(row: Record<string, unknown>) {
     email: row.email,
     tipo: row.role,
     empresa: row.company_name,
+    telefono: row.phone,
+    especialidad: row.professional_specialty,
+    estadoVerificacion: row.verification_status,
+    puntuacionConocimientos: row.knowledge_assessment_score,
     cifDniEnmascarado: taxId ? `••••${taxId.slice(-4)}` : "",
     fechaRegistro: row.created_at,
     rgpdAceptadoEn: row.privacy_accepted_at,
@@ -38,8 +49,9 @@ export async function GET(request: Request) {
   try {
     const row = await getD1()
       .prepare(
-        `SELECT id, email, name, role, tax_id, company_name,
-                privacy_accepted_at, created_at
+        `SELECT id, email, name, role, tax_id, company_name, phone,
+                professional_specialty, verification_status,
+                knowledge_assessment_score, privacy_accepted_at, created_at
            FROM users
           WHERE email = ?1`,
       )
@@ -68,6 +80,8 @@ export async function POST(request: Request) {
       .toUpperCase()
       .replace(/[\s-]/g, "");
     const empresa = cleanText(payload.empresa, 120);
+    const telefono = cleanText(payload.telefono, 30);
+    const especialidad = cleanText(payload.especialidad, 80);
 
     if (!nombre || !email || !tipo || !cifDni) {
       return Response.json(
@@ -105,10 +119,29 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (tipo === "profesional" && !empresa) {
+    if (tipo === "profesional" && (!empresa || !especialidad || !telefono)) {
       return Response.json(
-        { error: "La razón social es obligatoria para profesionales." },
+        { error: "La razón social, la especialidad y el teléfono son obligatorios para profesionales." },
         { status: 400 },
+      );
+    }
+
+    const assessment = tipo === "profesional"
+      ? evaluateProfessionalAssessment(payload.evaluacionConocimientos)
+      : null;
+    if (assessment && !assessment.valid) {
+      return Response.json(
+        { error: assessment.error ?? "Debes completar el test de conocimientos." },
+        { status: 400 },
+      );
+    }
+    if (assessment && !assessment.passed) {
+      return Response.json(
+        {
+          error: "Debes aprobar el test de conocimientos para crear una cuenta profesional.",
+          data: { puntuacion: assessment.score, minimo: 80 },
+        },
+        { status: 422 },
       );
     }
 
@@ -129,9 +162,11 @@ export async function POST(request: Request) {
     await db
       .prepare(
         `INSERT INTO users
-          (id, email, name, role, tax_id, company_name,
+          (id, email, name, role, tax_id, company_name, phone, professional_specialty,
+           verification_status, knowledge_assessment_version,
+           knowledge_assessment_score, knowledge_assessment_passed_at,
            privacy_version, privacy_accepted_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?8)`,
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?14)`,
       )
       .bind(
         id,
@@ -140,16 +175,41 @@ export async function POST(request: Request) {
         tipo,
         cifDni,
         empresa || null,
+        telefono || null,
+        especialidad || null,
+        tipo === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
+        assessment ? PROFESSIONAL_ASSESSMENT_VERSION : null,
+        assessment?.score ?? null,
+        assessment ? now : null,
         "2026-08-09",
         now,
       )
       .run();
 
+    if (tipo === "profesional") {
+      await db
+        .prepare(
+          `INSERT INTO professional_credit_accounts
+            (professional_email, balance_cents, auto_charge_enabled, updated_at)
+           VALUES (?1, 0, 0, ?2)`,
+        )
+        .bind(email, now)
+        .run();
+    }
+
     return Response.json(
       {
         success: true,
-        mensaje: "Usuario registrado correctamente.",
-        data: { usuarioId: id, email, tipo },
+        mensaje: tipo === "profesional"
+          ? "Test aprobado. Cuenta creada y enviada a revisión profesional."
+          : "Usuario registrado correctamente.",
+        data: {
+          usuarioId: id,
+          email,
+          tipo,
+          estadoVerificacion: tipo === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
+          puntuacionConocimientos: assessment?.score ?? null,
+        },
       },
       { status: 201 },
     );
