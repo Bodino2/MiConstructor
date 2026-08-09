@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BrandMark as MiConstructorMark } from "./brand-logo";
+import {
+  estimateProjectPrice,
+  PROJECT_TYPES,
+  QUALITY_LEVELS,
+} from "@/lib/project-estimator";
 
 type NavKey = "resumen" | "proyectos" | "profesionales" | "mensajes";
 
@@ -105,8 +110,16 @@ export default function MiConstructorApp() {
   const busy = false;
   const [formError, setFormError] = useState("");
   const [budgetDraft, setBudgetDraft] = useState(25000);
+  const [estimatorType, setEstimatorType] = useState("reforma_integral");
+  const [estimatorArea, setEstimatorArea] = useState(70);
+  const [estimatorQuality, setEstimatorQuality] = useState("estandar");
   const [proposalProjectId, setProposalProjectId] = useState<number | null>(null);
   const [professionalOnboardingOpen, setProfessionalOnboardingOpen] = useState(false);
+  const [professionalPreview, setProfessionalPreview] = useState<string | null>(null);
+  const [portfolioUploadOpen, setPortfolioUploadOpen] = useState(false);
+  const [evidenceUploadOpen, setEvidenceUploadOpen] = useState(false);
+  const [insuranceUploadOpen, setInsuranceUploadOpen] = useState(false);
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
 
@@ -129,6 +142,15 @@ export default function MiConstructorApp() {
     [profile, viewer.name],
   );
 
+  const projectEstimate = useMemo(
+    () => estimateProjectPrice({
+      projectType: estimatorType,
+      squareMeters: estimatorArea,
+      qualityLevel: estimatorQuality,
+    }),
+    [estimatorArea, estimatorQuality, estimatorType],
+  );
+
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 3200);
@@ -137,7 +159,7 @@ export default function MiConstructorApp() {
   function addProject(formData: FormData) {
     const title = String(formData.get("title") || "Nueva reforma");
     const budget = Number(formData.get("budget") || 0);
-    const category = String(formData.get("category") || "Reforma integral");
+    const category = PROJECT_TYPES[String(formData.get("category"))]?.label ?? "Reforma integral";
     const location = String(formData.get("location") || "Madrid");
     const description = String(formData.get("description") || "");
     const milestoneAmounts = splitBudget(budget);
@@ -287,6 +309,9 @@ export default function MiConstructorApp() {
                 projects={projects}
                 onPropose={setProposalProjectId}
                 onShowVerification={() => setProfessionalOnboardingOpen(true)}
+                onPortfolio={() => setPortfolioUploadOpen(true)}
+                onEvidence={() => setEvidenceUploadOpen(true)}
+                onInsurance={() => setInsuranceUploadOpen(true)}
               />
             ) : activeProject ? (
               <DashboardView
@@ -295,6 +320,8 @@ export default function MiConstructorApp() {
                 onSelect={setActiveProjectId}
                 onNavigate={setActiveNav}
                 onNotify={notify}
+                onInspectProfessional={setProfessionalPreview}
+                onOpenContract={() => setContractPreviewOpen(true)}
               />
             ) : (
               <EmptyProjects onCreate={() => setCreateOpen(true)} />
@@ -305,13 +332,16 @@ export default function MiConstructorApp() {
                 projects={projects}
                 onPropose={setProposalProjectId}
                 onShowVerification={() => setProfessionalOnboardingOpen(true)}
+                onPortfolio={() => setPortfolioUploadOpen(true)}
+                onEvidence={() => setEvidenceUploadOpen(true)}
+                onInsurance={() => setInsuranceUploadOpen(true)}
                 expanded
               />
             ) : (
               <ProjectsView projects={projects} onCreate={() => setCreateOpen(true)} onSelect={(id) => { setActiveProjectId(id); setActiveNav("resumen"); }} />
             )
           ) : activeNav === "profesionales" ? (
-            <ProfessionalsView onNotify={notify} />
+            <ProfessionalsView onNotify={notify} onInspect={setProfessionalPreview} />
           ) : (
             <MessagesView onNotify={notify} />
           )}
@@ -320,12 +350,12 @@ export default function MiConstructorApp() {
 
       {createOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setCreateOpen(false)}>
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="modal project-create-modal" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
                 <span className="modal-kicker">NUEVO PROYECTO</span>
                 <h2 id="new-project-title">Cuéntanos qué quieres construir</h2>
-                <p>El presupuesto se dividirá en cuatro hitos verificables.</p>
+                <p>Obtén una referencia de mercado antes de publicar y recibir ofertas.</p>
               </div>
               <button type="button" aria-label="Cerrar" onClick={() => setCreateOpen(false)}>×</button>
             </div>
@@ -337,12 +367,8 @@ export default function MiConstructorApp() {
               <div className="form-grid">
                 <label>
                   Tipo de obra
-                  <select name="category" defaultValue="Reforma integral">
-                    <option>Reforma integral</option>
-                    <option>Cocinas</option>
-                    <option>Baños</option>
-                    <option>Obra nueva</option>
-                    <option>Instalaciones</option>
+                  <select name="category" value={estimatorType} onChange={(event) => setEstimatorType(event.target.value)}>
+                    {Object.entries(PROJECT_TYPES).map(([value, item]) => <option value={value} key={value}>{item.label}</option>)}
                   </select>
                 </label>
                 <label>
@@ -354,6 +380,27 @@ export default function MiConstructorApp() {
                 Descripción de la obra
                 <textarea name="description" required minLength={30} placeholder="Describe el estado actual, los trabajos necesarios y el resultado esperado…" />
               </label>
+              <section className="budget-estimator" aria-labelledby="budget-estimator-title">
+                <div className="budget-estimator-head">
+                  <div><span>ESTIMADOR DE PRESUPUESTO</span><h3 id="budget-estimator-title">Conoce el rango antes de publicar</h3></div>
+                  <small>Estimación orientativa · IVA estimado incluido</small>
+                </div>
+                <p>Te ayudamos a entender los costes de mercado antes de recibir ofertas. El precio final depende de las condiciones reales de la obra.</p>
+                <div className="estimator-inputs">
+                  <label>Superficie<div className="money-input"><input type="number" min="1" max="1000" step="1" value={estimatorArea} onChange={(event) => setEstimatorArea(Number(event.target.value))} /><span>m²</span></div></label>
+                  <label>Nivel de calidades<select value={estimatorQuality} onChange={(event) => setEstimatorQuality(event.target.value)}>{Object.entries(QUALITY_LEVELS).map(([value, item]) => <option value={value} key={value}>{item.label}</option>)}</select></label>
+                </div>
+                {projectEstimate.valid ? (
+                  <div className="estimator-result" aria-live="polite">
+                    <div className="estimator-range"><small>ESTIMACIÓN ORIENTATIVA DE MERCADO</small><strong>{euros.format(projectEstimate.range.minimum)} – {euros.format(projectEstimate.range.maximum)}</strong><span>{projectEstimate.input.projectTypeLabel} · {projectEstimate.input.squareMeters} m² · {projectEstimate.input.qualityLabel}</span></div>
+                    <div className="estimator-breakdown">
+                      {Object.values(projectEstimate.breakdown).map((item) => <span key={item.label}><i style={{ width: `${item.share * 100}%` }} /><b>{item.label}</b><small>{euros.format(item.minimum)} – {euros.format(item.maximum)}</small></span>)}
+                    </div>
+                    <button type="button" onClick={() => setBudgetDraft(Math.round((projectEstimate.range.minimum + projectEstimate.range.maximum) / 200) * 100)}>Usar el punto medio como presupuesto</button>
+                  </div>
+                ) : <p className="form-error standalone">Introduce una superficie válida entre 1 y 1.000 m².</p>}
+                <small className="estimator-note">Esta simulación no sustituye una medición técnica. Los profesionales verificados enviarán presupuestos exactos después de revisar el proyecto.</small>
+              </section>
               <label>
                 Presupuesto máximo
                 <div className="money-input"><input name="budget" type="number" min="1000" step="100" required value={budgetDraft} onChange={(event) => setBudgetDraft(Number(event.target.value))} /><span>EUR</span></div>
@@ -395,6 +442,12 @@ export default function MiConstructorApp() {
       {professionalOnboardingOpen ? (
         <ProfessionalOnboardingModal onClose={closeProfessionalOnboarding} />
       ) : null}
+
+      {professionalPreview ? <ProfessionalProofModal name={professionalPreview} onClose={() => setProfessionalPreview(null)} /> : null}
+      {portfolioUploadOpen ? <PortfolioUploadModal onClose={() => setPortfolioUploadOpen(false)} onSaved={() => { setPortfolioUploadOpen(false); notify("Trabajo enviado a moderación con fotos de antes y después."); }} /> : null}
+      {evidenceUploadOpen ? <EvidenceUploadModal onClose={() => setEvidenceUploadOpen(false)} onSaved={() => { setEvidenceUploadOpen(false); notify("Evidencia añadida al hito y al Pasaporte Digital de la obra."); }} /> : null}
+      {insuranceUploadOpen ? <InsuranceUploadModal onClose={() => setInsuranceUploadOpen(false)} onSaved={() => { setInsuranceUploadOpen(false); notify("Póliza RC enviada a verificación."); }} /> : null}
+      {contractPreviewOpen ? <ContractPreviewModal onClose={() => setContractPreviewOpen(false)} onGenerate={() => { setContractPreviewOpen(false); notify("Contrato PDF generado y enviado a ambas partes para firma."); }} /> : null}
 
       {toast ? <div className="toast" role="status"><span>✓</span>{toast}</div> : null}
       {mobileNav ? <button className="mobile-scrim" aria-label="Cerrar navegación" onClick={() => setMobileNav(false)} /> : null}
@@ -439,11 +492,17 @@ function ProfessionalDashboard({
   projects,
   onPropose,
   onShowVerification,
+  onPortfolio,
+  onEvidence,
+  onInsurance,
   expanded = false,
 }: {
   projects: Project[];
   onPropose: (id: number) => void;
   onShowVerification: () => void;
+  onPortfolio: () => void;
+  onEvidence: () => void;
+  onInsurance: () => void;
   expanded?: boolean;
 }) {
   return (
@@ -463,6 +522,12 @@ function ProfessionalDashboard({
         <button className="active">Todos</button><button>Reforma integral</button><button>Cocinas</button><button>Madrid</button>
         <span>{projects.length} oportunidades</span>
       </div>
+      <div className="professional-toolbox panel">
+        <div><span>HERRAMIENTAS PROFESIONALES</span><strong>Trabaja y documenta sin salir de MiConstructor</strong></div>
+        <button type="button" onClick={onPortfolio}>＋ Antes / después</button>
+        <button type="button" onClick={onEvidence}>▧ Diario de obra</button>
+        <button type="button" onClick={onInsurance}>◇ Seguro RC</button>
+      </div>
       {projects.length ? (
         <div className="opportunity-list">
           {projects.map((project) => (
@@ -476,7 +541,7 @@ function ProfessionalDashboard({
               <div className="opportunity-offer">
                 <small>PRESUPUESTO DEL CLIENTE</small>
                 <strong>{euros.format(project.budget)}</strong>
-                <p>Ver el proyecto es gratis · Sin comisión sobre la obra</p>
+                <p>Ver el proyecto es gratis · Selecciones facturadas semanalmente</p>
                 <button className="primary-button" onClick={() => onPropose(project.id)}>Enviar propuesta →</button>
               </div>
             </article>
@@ -490,7 +555,7 @@ function ProfessionalDashboard({
 }
 
 function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [assessment, setAssessment] = useState<PublicAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -546,10 +611,10 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
         <div className="onboarding-brand">
           <BrandMark />
           <strong>MiConstructor</strong>
-          <span>ALTA PROFESIONAL · PASO {step} DE 3</span>
+          <span>ALTA PROFESIONAL · PASO {step} DE 4</span>
           <button type="button" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
-        <div className="onboarding-progress" aria-label={`Paso ${step} de 3`}><i style={{ width: `${(step / 3) * 100}%` }} /></div>
+        <div className="onboarding-progress" aria-label={`Paso ${step} de 4`}><i style={{ width: `${(step / 4) * 100}%` }} /></div>
 
         {step === 1 ? (
           <>
@@ -618,21 +683,35 @@ function ProfessionalOnboardingModal({ onClose }: { onClose: () => void }) {
             <h2 id="professional-onboarding-title">{result.passed ? "Test aprobado" : "Todavía no está aprobado"}</h2>
             <strong>{result.score}%</strong>
             <p>{result.passed
-              ? "La cuenta se crea con estado «Pendiente de revisión». MiConstructor comprobará la documentación y la especialidad antes de activar el perfil profesional."
+              ? "El siguiente paso obligatorio es autorizar la domiciliación bancaria semanal. Después, MiConstructor revisará la documentación y la especialidad antes de activar el perfil."
               : "Es necesario alcanzar el 80%. Puedes repasar las respuestas y volver a realizar la evaluación antes de crear la cuenta profesional."}</p>
             <div className="verification-status-flow">
               <span className="done"><b>1</b> Test aprobado</span>
               <i />
               <span className={result.passed ? "active" : "locked"}><b>2</b> Revisión documental</span>
               <i />
-              <span className="locked"><b>3</b> Cuenta activa</span>
+              <span className="locked"><b>3</b> Mandato SEPA</span>
             </div>
             {result.passed ? (
-              <button className="primary-button onboarding-submit" type="button" onClick={onClose}>Entendido, finalizar demo</button>
+              <button className="primary-button onboarding-submit" type="button" onClick={() => setStep(4)}>Continuar a domiciliación →</button>
             ) : (
               <button className="primary-button onboarding-submit" type="button" onClick={() => { setResult(null); setStep(2); }}>Repetir el test</button>
             )}
-            <small>Hasta la aprobación final no se pueden enviar propuestas ni mostrar la insignia «Profesional verificado».</small>
+            <small>Sin test, revisión documental y mandato de domiciliación verificado, la cuenta no puede activarse.</small>
+          </div>
+        ) : null}
+
+        {step === 4 && result?.passed ? (
+          <div className="direct-debit-step">
+            <span className="modal-kicker">FACTURACIÓN PROFESIONAL</span>
+            <h2 id="professional-onboarding-title">Domiciliación bancaria obligatoria</h2>
+            <p>Las selecciones recibidas se agrupan en una factura semanal y se cobran mediante adeudo directo SEPA. MiConstructor no almacena el IBAN completo.</p>
+            <div className="direct-debit-card">
+              <span>SEPA</span><div><strong>Mandato de adeudo directo</strong><small>Configuración segura mediante el proveedor de pagos</small></div><b>OBLIGATORIO</b>
+            </div>
+            <label className="consent-row"><input type="checkbox" required /><span>Acepto la facturación semanal y entiendo que un impago suspenderá la cuenta hasta liquidar todo el saldo pendiente.</span></label>
+            <button className="primary-button onboarding-submit" type="button" onClick={onClose}>Simular mandato y finalizar demo</button>
+            <small>En producción, este botón abrirá el formulario seguro del proveedor para firmar el mandato SEPA.</small>
           </div>
         ) : null}
       </section>
@@ -653,6 +732,14 @@ function ProposalModal({
   onClose: () => void;
   onSubmit: (formData: FormData) => void;
 }) {
+  const baseBudget = project?.budget ?? 0;
+  const [labor, setLabor] = useState(Math.round(baseBudget * 0.48));
+  const [materials, setMaterials] = useState(Math.round(baseBudget * 0.4));
+  const [transport, setTransport] = useState(Math.round(baseBudget * 0.04));
+  const [waste, setWaste] = useState(Math.round(baseBudget * 0.08));
+  const subtotal = labor + materials + transport + waste;
+  const tax = Math.round(subtotal * 0.1);
+  const total = subtotal + tax;
   if (!project) return null;
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -662,13 +749,22 @@ function ProposalModal({
           <button type="button" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
         <form action={onSubmit}>
-          <div className="form-grid">
-            <label>Tu presupuesto<div className="money-input"><input name="amount" type="number" min="1000" step="100" defaultValue={project.budget} required /><span>EUR</span></div></label>
-            <label>Plazo estimado<input name="days" type="number" min="1" max="730" defaultValue="60" required /></label>
+          <div className="quote-builder-head"><span>GENERATOR DE DEVIZE</span><p>Construye una oferta clara por partidas. El cliente verá cada importe antes de aceptar.</p></div>
+          <div className="quote-line-items">
+            {[
+              ["Mano de obra", labor, setLabor],
+              ["Materiales y acabados", materials, setMaterials],
+              ["Transporte", transport, setTransport],
+              ["Residuos y medios auxiliares", waste, setWaste],
+            ].map(([label, value, setter]) => (
+              <label key={String(label)}><span>{label}</span><div className="money-input"><input type="number" min="0" step="50" value={Number(value)} onChange={(event) => (setter as (value: number) => void)(Number(event.target.value))} /><span>EUR</span></div></label>
+            ))}
           </div>
-          <label>Mensaje al cliente<textarea name="message" minLength={20} required placeholder="Explica tu experiencia, disponibilidad y cómo abordarías el proyecto…" /></label>
+          <div className="quote-totals"><span>Subtotal <b>{euros.format(subtotal)}</b></span><span>IVA estimado (10%) <b>{euros.format(tax)}</b></span><strong>Total <b>{euros.format(total)}</b></strong></div>
+          <div className="form-grid"><label>Plazo estimado<input name="days" type="number" min="1" max="730" defaultValue="60" required /></label><label>Validez de la oferta<input name="validity" type="number" min="1" max="90" defaultValue="30" required /></label></div>
+          <label>Condiciones y alcance<textarea name="message" minLength={20} required placeholder="Describe el alcance, exclusiones, forma de trabajo y garantías…" /></label>
           {error ? <p className="form-error standalone">{error}</p> : null}
-          <div className="modal-actions"><button className="secondary-button" type="button" onClick={onClose}>Cancelar</button><button className="primary-button" disabled={busy}>{busy ? "Enviando…" : "Enviar propuesta →"}</button></div>
+          <div className="modal-actions"><button className="secondary-button" type="button" onClick={onClose}>Guardar borrador</button><button className="primary-button" disabled={busy}>{busy ? "Enviando…" : "Generar y enviar presupuesto →"}</button></div>
         </form>
       </section>
     </div>
@@ -681,12 +777,16 @@ function DashboardView({
   onSelect,
   onNavigate,
   onNotify,
+  onInspectProfessional,
+  onOpenContract,
 }: {
   project: Project;
   projects: Project[];
   onSelect: (id: number) => void;
   onNavigate: (key: NavKey) => void;
   onNotify: (message: string) => void;
+  onInspectProfessional: (name: string) => void;
+  onOpenContract: () => void;
 }) {
   return (
     <>
@@ -703,6 +803,20 @@ function DashboardView({
         </div>
         <button className="secondary-button" onClick={() => onNavigate("proyectos")}>Ver detalles <span>→</span></button>
       </section>
+
+      {project.status === "Recibiendo ofertas" ? (
+        <section className="received-quotes panel">
+          <div className="panel-heading"><div><h2>Presupuestos recibidos</h2><p>Compara partidas, reseñas y trabajos reales antes de aceptar.</p></div><span className="verified">2 ofertas verificadas</span></div>
+          <div className="received-quote-grid">
+            {[
+              ["Construcciones Rivas", "4,8", "36 reseñas", "14.850 €"],
+              ["Reformas Alcázar", "4,9", "21 reseñas", "15.420 €"],
+            ].map(([name, rating, reviews, amount]) => (
+              <article key={name}><div><span>{name.slice(0, 2).toUpperCase()}</span><div><strong>{name}</strong><small>✓ Verificado · Asegurado</small></div></div><p>★ {rating} · {reviews}</p><b>{amount}</b><button type="button" onClick={() => onInspectProfessional(name)}>Reseñas y antes/después</button><button className="accept-quote" type="button" onClick={onOpenContract}>Revisar presupuesto y contrato →</button></article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="metrics-grid">
         <article className="metric-card accent-blue">
@@ -803,7 +917,7 @@ function ProjectsView({ projects, onCreate, onSelect }: { projects: Project[]; o
   );
 }
 
-function ProfessionalsView({ onNotify }: { onNotify: (message: string) => void }) {
+function ProfessionalsView({ onNotify, onInspect }: { onNotify: (message: string) => void; onInspect: (name: string) => void }) {
   const professionals = [
     ["AS", "Arquitectura Sol", "Arquitectura y dirección de obra", "4,9", "Madrid"],
     ["CR", "Construcciones Rivas", "Reformas integrales", "4,8", "Madrid y Toledo"],
@@ -815,7 +929,7 @@ function ProfessionalsView({ onNotify }: { onNotify: (message: string) => void }
       <div className="professional-grid">
         {professionals.map(([avatar, name, specialty, rating, area]) => (
           <article className="panel directory-card" key={name}>
-            <div className="directory-avatar">{avatar}<i>✓</i></div><small>TEST Y PERFIL APROBADOS</small><h2>{name}</h2><p>{specialty}</p><div><span>★ {rating}</span><span>◎ {area}</span></div><button onClick={() => onNotify(`${name} añadido a la shortlist. En producción, el contacto se desbloquea después de cobrar la tarifa al profesional.`)}>Añadir a shortlist</button>
+            <div className="directory-avatar">{avatar}<i>✓</i></div><small>TEST, PERFIL Y RC APROBADOS</small><h2>{name}</h2><p>{specialty}</p><div><span>★ {rating}</span><span>◎ {area}</span></div><button className="review-button" onClick={() => onInspect(name)}>Ver reseñas y trabajos</button><button onClick={() => onNotify(`${name} añadido a la shortlist. La selección se incluirá en su facturación semanal.`)}>Añadir a shortlist</button>
           </article>
         ))}
       </div>
@@ -829,5 +943,45 @@ function MessagesView({ onNotify }: { onNotify: (message: string) => void }) {
       <aside><div><span className="message-avatar">CS</span><div><strong>Construcciones Serrano</strong><p>He subido las fotos de hoy.</p></div><time>09:42</time></div><div><span className="message-avatar orange">AS</span><div><strong>Arquitectura Sol</strong><p>Presupuesto disponible.</p></div><time>Ayer</time></div></aside>
       <div className="conversation"><header><span className="message-avatar">CS</span><div><strong>Construcciones Serrano</strong><p><i /> En obra ahora</p></div></header><div className="chat"><p className="received">Buenos días, María. Hemos terminado la instalación eléctrica del salón.</p><p className="received">He subido las fotos y el certificado para que puedas revisarlo.</p><p className="sent">Perfecto, lo reviso esta tarde. ¡Gracias!</p></div><form onSubmit={(event) => { event.preventDefault(); onNotify("Mensaje enviado."); }}><input aria-label="Mensaje" placeholder="Escribe un mensaje…" /><button>Enviar</button></form></div>
     </section>
+  );
+}
+
+function ProfessionalProofModal({ name, onClose }: { name: string; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal proof-modal" role="dialog" aria-modal="true" aria-labelledby="proof-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-head"><div><span className="modal-kicker">PERFIL PROFESIONAL VERIFICADO</span><h2 id="proof-title">{name}</h2><p>★ 4,9 · 36 reseñas verificadas · Seguro RC aprobado</p></div><button type="button" aria-label="Cerrar" onClick={onClose}>×</button></div>
+        <div className="proof-content">
+          <div className="proof-badges"><span>✓ Identidad</span><span>✓ Test profesional</span><span>◇ Asegurado</span><span>★ Pago verificado</span></div>
+          <section><div className="proof-section-head"><h3>Antes y después</h3><small>Trabajos moderados por MiConstructor</small></div><div className="before-after"><article><div className="proof-image before" /><span>ANTES</span></article><article><div className="proof-image after" /><span>DESPUÉS</span></article></div><h4>Reforma integral de vivienda · Madrid</h4><p>Redistribución, instalaciones, cocina y acabados. Finalizada en 2026.</p></section>
+          <section><div className="proof-section-head"><h3>Reseñas de clientes</h3><small>Solo proyectos finalizados y pagados</small></div><div className="review-list"><article><header><strong>María G.</strong><b>★★★★★</b></header><p>Presupuesto muy claro, comunicación constante y cada hito quedó documentado con fotografías.</p><small>Reforma integral · Pago verificado</small></article><article><header><strong>Javier R.</strong><b>★★★★★</b></header><p>Cumplieron el plazo y explicaron con transparencia cualquier cambio antes de ejecutarlo.</p><small>Cocina y baño · Pago verificado</small></article></div></section>
+          <p className="double-blind-note">Las reseñas son double-blind: se publican cuando ambas partes responden o al finalizar la ventana de 14 días.</p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PortfolioUploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="portfolio-upload-title" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><span className="modal-kicker">PORTFOLIO PROFESIONAL</span><h2 id="portfolio-upload-title">Añadir un antes y después</h2><p>Las imágenes se revisan antes de aparecer en tu perfil.</p></div><button type="button" onClick={onClose}>×</button></div><form onSubmit={(event) => { event.preventDefault(); onSaved(); }}><label>Título del trabajo<input required defaultValue="Reforma integral de vivienda" /></label><div className="form-grid"><label>Foto antes<input type="file" accept="image/jpeg,image/png,image/webp" required /></label><label>Foto después<input type="file" accept="image/jpeg,image/png,image/webp" required /></label></div><label>Descripción<textarea minLength={20} required placeholder="Explica el alcance, materiales y resultado…" /></label><label className="consent-row"><input type="checkbox" required /><span>Confirmo que tengo autorización para publicar estas imágenes y que no muestran datos personales.</span></label><div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button">Enviar a moderación →</button></div></form></section></div>
+  );
+}
+
+function EvidenceUploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="evidence-upload-title" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><span className="modal-kicker">DIARIO DE OBRA</span><h2 id="evidence-upload-title">Documentar el hito actual</h2><p>La evidencia quedará también en el Pasaporte Digital de la vivienda.</p></div><button type="button" onClick={onClose}>×</button></div><form onSubmit={(event) => { event.preventDefault(); onSaved(); }}><label>Hito<select defaultValue="Instalaciones"><option>Instalaciones y tabiquería</option><option>Revestimientos y acabados</option></select></label><label>Foto o vídeo<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" required /></label><label>Descripción técnica<textarea minLength={10} required placeholder="Ej. Sustitución completa de tuberías y ubicación de nuevas llaves de corte…" /></label><div className="passport-callout"><span>▧</span><div><strong>Pasaporte Digital</strong><p>Este registro conservará qué se cambió, dónde y en qué fecha.</p></div></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button">Guardar evidencia →</button></div></form></section></div>
+  );
+}
+
+function InsuranceUploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="insurance-upload-title" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><span className="modal-kicker">SEGURO DE RESPONSABILIDAD CIVIL</span><h2 id="insurance-upload-title">Solicitar badge «Asegurado»</h2><p>El badge solo aparece después de revisar vigencia y cobertura.</p></div><button type="button" onClick={onClose}>×</button></div><form onSubmit={(event) => { event.preventDefault(); onSaved(); }}><div className="form-grid"><label>Aseguradora<input required placeholder="Nombre de la aseguradora" /></label><label>Cobertura<div className="money-input"><input type="number" min="1" required defaultValue="300000" /><span>EUR</span></div></label></div><div className="form-grid"><label>Válida desde<input type="date" required /></label><label>Válida hasta<input type="date" required /></label></div><label>Póliza en PDF<input type="file" accept="application/pdf" required /></label><div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button">Enviar a verificación →</button></div></form></section></div>
+  );
+}
+
+function ContractPreviewModal({ onClose, onGenerate }: { onClose: () => void; onGenerate: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal contract-modal" role="dialog" aria-modal="true" aria-labelledby="contract-preview-title" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><span className="modal-kicker">CONTRATO DIGITAL DE OBRA</span><h2 id="contract-preview-title">Revisa antes de aceptar</h2><p>El contrato se genera a partir del proyecto y del presupuesto seleccionado.</p></div><button type="button" onClick={onClose}>×</button></div><div className="contract-preview"><header><span>MI CONSTRUCTOR</span><b>MC-000002</b></header><h3>Contrato de ejecución de obra</h3><p><strong>Partes:</strong> María López y Construcciones Rivas.</p><p><strong>Objeto:</strong> Renovación de cocina en Madrid, según alcance y partidas del presupuesto.</p><div className="contract-summary"><span>Mano de obra <b>7.100 €</b></span><span>Materiales <b>5.900 €</b></span><span>Transporte y residuos <b>1.850 €</b></span><strong>Total aceptado <b>14.850 €</b></strong></div><p><strong>Control:</strong> pagos por hitos, evidencias obligatorias, cambios de alcance documentados y trazabilidad completa.</p><small>Este modelo debe revisarse y completarse con las condiciones particulares de cada obra antes de la firma.</small></div><div className="modal-actions contract-actions"><button type="button" className="secondary-button" onClick={onClose}>Volver</button><button type="button" className="primary-button" onClick={onGenerate}>Aceptar y generar PDF →</button></div></section></div>
   );
 }

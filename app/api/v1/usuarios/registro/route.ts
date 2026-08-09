@@ -189,9 +189,10 @@ export async function POST(request: Request) {
     if (tipo === "profesional") {
       await db
         .prepare(
-          `INSERT INTO professional_credit_accounts
-            (professional_email, balance_cents, auto_charge_enabled, updated_at)
-           VALUES (?1, 0, 0, ?2)`,
+          `INSERT INTO professional_billing_accounts
+            (professional_email, status, payment_provider,
+             unbilled_balance_cents, overdue_balance_cents, created_at, updated_at)
+           VALUES (?1, 'PENDIENTE_MANDATO', 'STRIPE', 0, 0, ?2, ?2)`,
         )
         .bind(email, now)
         .run();
@@ -201,7 +202,7 @@ export async function POST(request: Request) {
       {
         success: true,
         mensaje: tipo === "profesional"
-          ? "Test aprobado. Cuenta creada y enviada a revisión profesional."
+          ? "Test aprobado. Activa la domiciliación y completa la revisión profesional."
           : "Usuario registrado correctamente.",
         data: {
           usuarioId: id,
@@ -209,6 +210,7 @@ export async function POST(request: Request) {
           tipo,
           estadoVerificacion: tipo === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
           puntuacionConocimientos: assessment?.score ?? null,
+          domiciliacionObligatoria: tipo === "profesional",
         },
       },
       { status: 201 },

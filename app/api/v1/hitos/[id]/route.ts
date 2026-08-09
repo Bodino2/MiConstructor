@@ -64,6 +64,18 @@ export async function PATCH(
     if (nextStatus === "DISPUTADO" && !isOwner && !isAssignedProfessional) {
       return Response.json({ error: "No tienes permisos." }, { status: 403 });
     }
+    if (["EN_REVISION", "LIBERADO"].includes(nextStatus)) {
+      const evidence = await db
+        .prepare("SELECT COUNT(*) AS total FROM milestone_evidence WHERE milestone_id = ?1")
+        .bind(milestoneId)
+        .first<{ total: number }>();
+      if (!evidence || evidence.total < 1) {
+        return Response.json(
+          { error: "El profesional debe añadir evidencia al Diario de Obra antes de revisar o liberar el hito." },
+          { status: 409 },
+        );
+      }
+    }
 
     const now = new Date().toISOString();
     await db.batch([

@@ -1,7 +1,6 @@
 import { databaseError, getD1 } from "@/lib/server/d1";
 import { requireIdentity } from "@/lib/server/identity";
 import { cleanText, toCents } from "@/lib/validation";
-import { publicationDecision } from "@/lib/business-rules";
 
 type MilestonePayload = {
   descripcion?: unknown;
@@ -15,8 +14,6 @@ type ProjectPayload = {
   ubicacion?: unknown;
   presupuestoTotal?: unknown;
   hitos?: unknown;
-  requiereGarantia?: unknown;
-  guaranteeChargeStatus?: unknown;
 };
 
 async function getProfile(email: string) {
@@ -43,9 +40,7 @@ export async function GET(request: Request) {
         : "WHERE p.status IN ('PUBLICADO', 'EN_CURSO')";
     const statement = db.prepare(
       `SELECT p.id, p.owner_email, p.title, p.description, p.category,
-              p.location, p.budget_cents, p.status, p.requires_guarantee,
-              p.guarantee_charge_status, p.escrow_status, p.completed_at,
-              p.auto_release_at, p.dispute_open, p.released_at,
+              p.location, p.budget_cents, p.status,
               p.assigned_professional_email, p.created_at,
               COUNT(m.id) AS milestone_count,
               SUM(CASE WHEN m.status = 'LIBERADO' THEN 1 ELSE 0 END) AS completed_count,
@@ -76,13 +71,6 @@ export async function GET(request: Request) {
         hitos: Number(row.milestone_count),
         hitosCompletados: Number(row.completed_count),
         importeLiberado: Number(row.released_cents) / 100,
-        requiereGarantia: Boolean(row.requires_guarantee),
-        guaranteeChargeStatus: row.guarantee_charge_status,
-        escrowStatus: row.escrow_status,
-        completedAt: row.completed_at,
-        autoReleaseAt: row.auto_release_at,
-        disputaAbierta: Boolean(row.dispute_open),
-        releasedAt: row.released_at,
         fechaCreacion: row.created_at,
       })),
     });
@@ -110,10 +98,6 @@ export async function POST(request: Request) {
     const categoria = cleanText(payload.categoria, 60);
     const ubicacion = cleanText(payload.ubicacion, 120);
     const budgetCents = toCents(payload.presupuestoTotal);
-    const requiresGuarantee = payload.requiereGarantia === true;
-    const guaranteeChargeStatus = requiresGuarantee
-      ? cleanText(payload.guaranteeChargeStatus, 20).toUpperCase() || "PENDING"
-      : "NOT_REQUIRED";
     const rawMilestones = Array.isArray(payload.hitos)
       ? (payload.hitos as MilestonePayload[])
       : [];
@@ -128,22 +112,6 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "El proyecto debe tener entre 2 y 8 hitos." },
         { status: 400 },
-      );
-    }
-    if (!["NOT_REQUIRED", "PENDING", "PAID", "FAILED"].includes(guaranteeChargeStatus)) {
-      return Response.json(
-        { error: "Estado de garantía no válido." },
-        { status: 400 },
-      );
-    }
-    const publication = publicationDecision({
-      requiresGuarantee,
-      guaranteeChargeStatus,
-    });
-    if (!publication.allowed) {
-      return Response.json(
-        { error: publication.message, code: publication.code },
-        { status: 409 },
       );
     }
 
@@ -172,22 +140,10 @@ export async function POST(request: Request) {
       .prepare(
         `INSERT INTO projects
           (owner_email, title, description, category, location,
-           budget_cents, status, requires_guarantee, guarantee_charge_status,
-           escrow_status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'PUBLICADO', ?7, ?8,
-                 'PENDING', ?9, ?9)`,
+           budget_cents, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'PUBLICADO', ?7, ?7)`,
       )
-      .bind(
-        identity,
-        titulo,
-        descripcion,
-        categoria,
-        ubicacion,
-        budgetCents,
-        requiresGuarantee ? 1 : 0,
-        guaranteeChargeStatus,
-        now,
-      )
+      .bind(identity, titulo, descripcion, categoria, ubicacion, budgetCents, now)
       .run();
     const projectId = Number(inserted.meta.last_row_id);
 
@@ -198,7 +154,7 @@ export async function POST(request: Request) {
             `INSERT INTO milestones
               (project_id, position, title, description, amount_cents,
                status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, '', ?4, 'PREVISTO', ?5, ?5)`,
+             VALUES (?1, ?2, ?3, '', ?4, 'RETENIDO', ?5, ?5)`,
           )
           .bind(projectId, hito.position, hito.title, hito.amountCents, now),
       ),
@@ -222,14 +178,11 @@ export async function POST(request: Request) {
           ubicacion,
           presupuestoTotal: budgetCents / 100,
           estado: "PUBLICADO",
-          requiereGarantia: requiresGuarantee,
-          guaranteeChargeStatus,
-          escrowStatus: "PENDING",
           hitos: hitos.map((hito) => ({
             idHito: hito.position,
             descripcion: hito.title,
             monto: hito.amountCents / 100,
-            estado: "PREVISTO",
+            estado: "RETENIDO",
           })),
           fechaCreacion: now,
         },

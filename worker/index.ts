@@ -5,6 +5,8 @@ import handler from "vinext/server/app-router-entry";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  BUCKET: R2Bucket;
+  BILLING_JOB_SECRET?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -31,6 +33,12 @@ const worker = {
     // the stable D1 binding to server-only helpers for the lifetime of the isolate.
     (globalThis as typeof globalThis & { __MICONSTRUCTOR_DB__?: D1Database })
       .__MICONSTRUCTOR_DB__ = env.DB;
+    const runtime = globalThis as typeof globalThis & {
+      __MICONSTRUCTOR_BUCKET__?: R2Bucket;
+      __MICONSTRUCTOR_BILLING_JOB_SECRET__?: string;
+    };
+    runtime.__MICONSTRUCTOR_BUCKET__ = env.BUCKET;
+    runtime.__MICONSTRUCTOR_BILLING_JOB_SECRET__ = env.BILLING_JOB_SECRET;
 
     const url = new URL(request.url);
 

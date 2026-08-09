@@ -87,7 +87,7 @@ export async function POST(
       )
       .bind(projectId, professionalEmail)
       .first<Record<string, unknown>>();
-    if (existing?.payment_status === "PAGADO") {
+    if (existing?.contact_unlocked_at) {
       return Response.json({
         success: true,
         mensaje: "El contacto ya estaba desbloqueado.",
@@ -109,127 +109,107 @@ export async function POST(
 
     const account = await db
       .prepare(
-        `SELECT balance_cents, auto_charge_enabled, payment_customer_ref
-           FROM professional_credit_accounts
+        `SELECT status, direct_debit_mandate_ref, unbilled_balance_cents,
+                overdue_balance_cents
+           FROM professional_billing_accounts
           WHERE professional_email = ?1`,
       )
       .bind(professionalEmail)
-      .first<{ balance_cents: number; auto_charge_enabled: number; payment_customer_ref: string | null }>();
-    const now = new Date().toISOString();
-
-    if ((account?.balance_cents ?? 0) >= pricing.feeCents) {
-      const debit = await db
-        .prepare(
-          `UPDATE professional_credit_accounts
-              SET balance_cents = balance_cents - ?1, updated_at = ?2
-            WHERE professional_email = ?3 AND balance_cents >= ?1`,
-        )
-        .bind(pricing.feeCents, now, professionalEmail)
-        .run();
-      if (!debit.meta.changes) {
-        return Response.json(
-          { error: "El saldo ha cambiado. Vuelve a intentar la selección." },
-          { status: 409 },
-        );
-      }
-
-      let shortlistId = Number(existing?.id ?? 0);
-      if (shortlistId) {
-        await db
-          .prepare(
-            `UPDATE project_shortlists
-                SET fee_cents = ?1, pricing_version = ?2, charge_method = 'CREDITS',
-                    payment_status = 'PAGADO', contact_unlocked_at = ?3, updated_at = ?3
-              WHERE id = ?4`,
-          )
-          .bind(pricing.feeCents, pricing.pricingVersion, now, shortlistId)
-          .run();
-      } else {
-        const inserted = await db
-          .prepare(
-            `INSERT INTO project_shortlists
-              (project_id, client_email, professional_email, project_budget_cents,
-               fee_cents, pricing_version, charge_method, payment_status,
-               contact_unlocked_at, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'CREDITS', 'PAGADO', ?7, ?7, ?7)`,
-          )
-          .bind(
-            projectId,
-            identity,
-            professionalEmail,
-            project.budget_cents,
-            pricing.feeCents,
-            pricing.pricingVersion,
-            now,
-          )
-          .run();
-        shortlistId = Number(inserted.meta.last_row_id);
-      }
-
-      await db
-        .prepare(
-          `INSERT INTO credit_transactions
-            (professional_email, shortlist_id, type, amount_cents, status,
-             payment_provider, created_at)
-           VALUES (?1, ?2, 'CARGO_SHORTLIST', ?3, 'COMPLETADO', 'CREDITS', ?4)`,
-        )
-        .bind(professionalEmail, shortlistId, -pricing.feeCents, now)
-        .run();
-
+      .first<{
+        status: string;
+        direct_debit_mandate_ref: string | null;
+        unbilled_balance_cents: number;
+        overdue_balance_cents: number;
+      }>();
+    if (
+      !account ||
+      account.status !== "ACTIVO" ||
+      !account.direct_debit_mandate_ref ||
+      account.overdue_balance_cents > 0
+    ) {
       return Response.json(
         {
-          success: true,
-          mensaje: "Profesional añadido a la shortlist. Contacto desbloqueado.",
-          data: {
-            shortlistId,
-            tarifaCentimos: pricing.feeCents,
-            metodo: "CREDITS",
-            contacto: unlockedContact(professional),
-          },
+          error:
+            "El profesional no tiene una domiciliación activa o mantiene saldo pendiente.",
         },
-        { status: 201 },
+        { status: 409 },
       );
     }
 
-    let shortlistId = Number(existing?.id ?? 0);
-    if (!shortlistId) {
-      const inserted = await db
-        .prepare(
-          `INSERT INTO project_shortlists
-            (project_id, client_email, professional_email, project_budget_cents,
-             fee_cents, pricing_version, charge_method, payment_status,
-             created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'STRIPE', 'PENDIENTE', ?7, ?7)`,
-        )
-        .bind(
-          projectId,
-          identity,
-          professionalEmail,
-          project.budget_cents,
-          pricing.feeCents,
-          pricing.pricingVersion,
-          now,
-        )
-        .run();
-      shortlistId = Number(inserted.meta.last_row_id);
+    const now = new Date().toISOString();
+    const inserted = await db
+      .prepare(
+        `INSERT INTO project_shortlists
+          (project_id, client_email, professional_email, project_budget_cents,
+           fee_cents, pricing_version, charge_method, payment_status,
+           contact_unlocked_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'DIRECT_DEBIT',
+                 'PENDIENTE_FACTURA', ?7, ?7, ?7)`,
+      )
+      .bind(
+        projectId,
+        identity,
+        professionalEmail,
+        project.budget_cents,
+        pricing.feeCents,
+        pricing.pricingVersion,
+        now,
+      )
+      .run();
+    const shortlistId = Number(inserted.meta.last_row_id);
+
+    await db
+      .prepare(
+        `INSERT INTO professional_billable_items
+          (professional_email, shortlist_id, description, amount_cents, status,
+           service_date, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'PENDIENTE', ?5, ?5, ?5)`,
+      )
+      .bind(
+        professionalEmail,
+        shortlistId,
+        `Contacto cualificado del proyecto ${projectId}`,
+        pricing.feeCents,
+        now,
+      )
+      .run();
+
+    const accrued = await db
+      .prepare(
+        `UPDATE professional_billing_accounts
+            SET unbilled_balance_cents = unbilled_balance_cents + ?1,
+                updated_at = ?2
+          WHERE professional_email = ?3
+            AND status = 'ACTIVO'
+            AND direct_debit_mandate_ref IS NOT NULL
+            AND overdue_balance_cents = 0`,
+      )
+      .bind(pricing.feeCents, now, professionalEmail)
+      .run();
+    if (!accrued.meta.changes) {
+      await db
+        .batch([
+          db.prepare("DELETE FROM professional_billable_items WHERE shortlist_id = ?1").bind(shortlistId),
+          db.prepare("DELETE FROM project_shortlists WHERE id = ?1").bind(shortlistId),
+        ]);
+      return Response.json(
+        { error: "La cuenta profesional ha cambiado de estado. Repite la selección." },
+        { status: 409 },
+      );
     }
 
     return Response.json(
       {
-        success: false,
-        error: "El profesional no tiene créditos suficientes. El contacto sigue bloqueado.",
+        success: true,
+        mensaje: "Profesional añadido a la shortlist. Contacto desbloqueado.",
         data: {
           shortlistId,
-          requierePago: true,
           tarifaCentimos: pricing.feeCents,
-          moneda: "EUR",
-          proveedorPreparado: "STRIPE",
-          cobroAutomaticoAutorizado: Boolean(
-            account?.auto_charge_enabled && account?.payment_customer_ref,
-          ),
+          facturacion: "SEMANAL_DIRECT_DEBIT",
+          contacto: unlockedContact(professional),
         },
       },
-      { status: 402 },
+      { status: 201 },
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

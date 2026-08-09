@@ -48,6 +48,32 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+    const billing = await db
+      .prepare(
+        `SELECT status, direct_debit_mandate_ref, overdue_balance_cents
+           FROM professional_billing_accounts
+          WHERE professional_email = ?1`,
+      )
+      .bind(identity)
+      .first<{
+        status: string;
+        direct_debit_mandate_ref: string | null;
+        overdue_balance_cents: number;
+      }>();
+    if (
+      !billing ||
+      billing.status !== "ACTIVO" ||
+      !billing.direct_debit_mandate_ref ||
+      billing.overdue_balance_cents > 0
+    ) {
+      return Response.json(
+        {
+          error:
+            "La cuenta profesional necesita una domiciliación activa y no puede tener saldo vencido.",
+        },
+        { status: 403 },
+      );
+    }
     const project = await db
       .prepare("SELECT status FROM projects WHERE id = ?1")
       .bind(projectId)

@@ -6,6 +6,9 @@ import {
   PROFESSIONAL_ASSESSMENT_VERSION,
 } from "../lib/professional-assessment.js";
 import { calculateShortlistFee } from "../lib/shortlist-pricing.js";
+import { estimateProjectPrice } from "../lib/project-estimator.js";
+import { billingAccountStateAfterCollection, previousWeeklyPeriod } from "../lib/weekly-billing.js";
+import { inspectSensitiveContactData } from "../lib/sensitive-data-filter.js";
 
 const correctAnswers = {
   alcance: "b",
@@ -47,11 +50,64 @@ test("la API pública del test no expone las respuestas correctas", () => {
   assert.equal("correctOption" in assessment.questions[0], false);
 });
 
-test("la tarifa de shortlist usa el presupuesto estimado y nunca la obra final", () => {
-  assert.equal(calculateShortlistFee(200_000).feeCents, 890);
-  assert.equal(calculateShortlistFee(1_200_000).feeCents, 2_490);
-  assert.equal(calculateShortlistFee(4_250_000).feeCents, 5_990);
-  assert.equal(calculateShortlistFee(10_000_000).feeCents, 10_000);
-  assert.equal(calculateShortlistFee(50_000_000).feeCents, 14_990);
+test("la tarifa de shortlist aplica 5%, 4% o 3% al presupuesto estimado", () => {
+  assert.deepEqual(
+    { fee: calculateShortlistFee(100_000).feeCents, rate: calculateShortlistFee(100_000).rate },
+    { fee: 5_000, rate: 0.05 },
+  );
+  assert.equal(calculateShortlistFee(150_000).feeCents, 7_500);
+  assert.deepEqual(
+    { fee: calculateShortlistFee(150_001).feeCents, rate: calculateShortlistFee(150_001).rate },
+    { fee: 6_000, rate: 0.04 },
+  );
+  assert.equal(calculateShortlistFee(500_000).feeCents, 20_000);
+  assert.equal(calculateShortlistFee(1_000_000).feeCents, 40_000);
+  assert.deepEqual(
+    { fee: calculateShortlistFee(1_000_001).feeCents, rate: calculateShortlistFee(1_000_001).rate },
+    { fee: 30_000, rate: 0.03 },
+  );
+  assert.equal(calculateShortlistFee(2_000_000).feeCents, 60_000);
   assert.equal(calculateShortlistFee(0).valid, false);
+});
+
+test("el estimador devuelve rango y partidas que cuadran con el total", () => {
+  const estimate = estimateProjectPrice({
+    projectType: "reforma_integral",
+    squareMeters: 70,
+    qualityLevel: "estandar",
+  });
+  assert.equal(estimate.valid, true);
+  assert.deepEqual(estimate.range, { minimum: 32_200, maximum: 45_500 });
+  const minimumParts = Object.values(estimate.breakdown).reduce(
+    (sum, item) => sum + item.minimum,
+    0,
+  );
+  const maximumParts = Object.values(estimate.breakdown).reduce(
+    (sum, item) => sum + item.maximum,
+    0,
+  );
+  assert.equal(minimumParts, estimate.range.minimum);
+  assert.equal(maximumParts, estimate.range.maximum);
+  assert.equal(estimateProjectPrice({ projectType: "x", squareMeters: 70, qualityLevel: "estandar" }).valid, false);
+});
+
+test("la semana de facturación cierra el lunes y el impago suspende", () => {
+  assert.deepEqual(previousWeeklyPeriod(new Date("2026-08-12T10:00:00Z")), {
+    start: "2026-08-03T00:00:00.000Z",
+    end: "2026-08-10T00:00:00.000Z",
+  });
+  assert.equal(
+    billingAccountStateAfterCollection({ status: "FALLIDA", overdueBalanceCents: 200 }).shouldBlockAccess,
+    true,
+  );
+  assert.equal(
+    billingAccountStateAfterCollection({ status: "PAGADA", overdueBalanceCents: 0 }).billingStatus,
+    "ACTIVO",
+  );
+});
+
+test("el chat bloquea datos de contacto antes del desbloqueo", () => {
+  assert.equal(inspectSensitiveContactData("Escríbeme a obra@example.com").blocked, true);
+  assert.equal(inspectSensitiveContactData("Mi IBAN es ES91 2100 0418 4502 0005 1332").blocked, true);
+  assert.equal(inspectSensitiveContactData("He terminado la instalación del salón").blocked, false);
 });

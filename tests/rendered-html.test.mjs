@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 test("el artefacto conserva el título y la marca de desarrollo", async () => {
-  const workerSource = await readFile(
-    new URL("../dist/server/index.js", import.meta.url),
+  async function readJavaScriptTree(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const sources = await Promise.all(entries.map(async (entry) => {
+      const url = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
+      if (entry.isDirectory()) return readJavaScriptTree(url);
+      return entry.name.endsWith(".js") ? readFile(url, "utf8") : "";
+    }));
+    return sources.join("\n");
+  }
+
+  const workerSource = await readJavaScriptTree(new URL("../dist/", import.meta.url));
+  const publicLandingSource = await readFile(
+    new URL("../app/components/public-landing.tsx", import.meta.url),
     "utf8",
   );
 
@@ -15,9 +26,16 @@ test("el artefacto conserva el título y la marca de desarrollo", async () => {
   assert.match(workerSource, /miconstructor-platform\.webp/);
   assert.match(workerSource, /construcción modular conectada digitalmente/);
   assert.match(workerSource, /Gratis hasta entrar/);
-  assert.match(workerSource, /Sin comisión final/);
+  assert.match(workerSource, /Cierre semanal/);
+  assert.match(workerSource, /Domiciliación bancaria obligatoria/);
+  assert.doesNotMatch(publicLandingSource, /3%, 4% o 5%/);
+  assert.doesNotMatch(publicLandingSource, /Proyecto superior a 10\.000 €/);
   assert.match(workerSource, /Test de conocimientos obligatorio/);
   assert.match(workerSource, /Profesional añadido a la shortlist/);
+  assert.match(workerSource, /ESTIMADOR DE PRESUPUESTO/);
+  assert.match(workerSource, /Antes y después/);
+  assert.match(workerSource, /CONTRATO DIGITAL DE OBRA/);
+  assert.match(workerSource, /DIARIO DE OBRA/);
   assert.doesNotMatch(workerSource, /PLATAFORMA SAAS PARA REFORMAS/);
   assert.doesNotMatch(workerSource, /2\.400\+ profesionales/i);
 });

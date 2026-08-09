@@ -134,6 +134,79 @@ export const professionalCreditAccounts = sqliteTable("professional_credit_accou
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const professionalBillingAccounts = sqliteTable("professional_billing_accounts", {
+  professionalEmail: text("professional_email").primaryKey(),
+  status: text("status", {
+    enum: ["PENDIENTE_MANDATO", "ACTIVO", "SUSPENDIDO_IMPAGO"],
+  })
+    .notNull()
+    .default("PENDIENTE_MANDATO"),
+  paymentProvider: text("payment_provider").notNull().default("STRIPE"),
+  paymentCustomerRef: text("payment_customer_ref"),
+  directDebitMandateRef: text("direct_debit_mandate_ref"),
+  unbilledBalanceCents: integer("unbilled_balance_cents").notNull().default(0),
+  overdueBalanceCents: integer("overdue_balance_cents").notNull().default(0),
+  lastInvoicedAt: text("last_invoiced_at"),
+  suspendedAt: text("suspended_at"),
+  suspensionReason: text("suspension_reason"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const weeklyInvoices = sqliteTable(
+  "weekly_invoices",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end").notNull(),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    status: text("status", {
+      enum: ["PENDIENTE_COBRO", "PAGADA", "FALLIDA"],
+    })
+      .notNull()
+      .default("PENDIENTE_COBRO"),
+    paymentProvider: text("payment_provider").notNull().default("STRIPE"),
+    paymentProviderRef: text("payment_provider_ref"),
+    failureReason: text("failure_reason"),
+    collectionRequestedAt: text("collection_requested_at"),
+    paidAt: text("paid_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("weekly_invoices_professional_period_idx").on(
+      table.professionalEmail,
+      table.periodStart,
+      table.periodEnd,
+    ),
+  ],
+);
+
+export const professionalBillableItems = sqliteTable(
+  "professional_billable_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    shortlistId: integer("shortlist_id").notNull(),
+    invoiceId: integer("invoice_id"),
+    description: text("description").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    status: text("status", {
+      enum: ["PENDIENTE", "FACTURADO", "PAGADO", "FALLIDO"],
+    })
+      .notNull()
+      .default("PENDIENTE"),
+    serviceDate: text("service_date").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("professional_billable_items_shortlist_idx").on(table.shortlistId),
+  ],
+);
+
 export const projectShortlists = sqliteTable(
   "project_shortlists",
   {
@@ -144,9 +217,18 @@ export const projectShortlists = sqliteTable(
     projectBudgetCents: integer("project_budget_cents").notNull(),
     feeCents: integer("fee_cents").notNull(),
     pricingVersion: text("pricing_version").notNull(),
-    chargeMethod: text("charge_method", { enum: ["CREDITS", "STRIPE"] }),
+    chargeMethod: text("charge_method", {
+      enum: ["CREDITS", "STRIPE", "DIRECT_DEBIT"],
+    }),
     paymentStatus: text("payment_status", {
-      enum: ["PENDIENTE", "PAGADO", "FALLIDO", "REEMBOLSADO"],
+      enum: [
+        "PENDIENTE",
+        "PENDIENTE_FACTURA",
+        "FACTURADO",
+        "PAGADO",
+        "FALLIDO",
+        "REEMBOLSADO",
+      ],
     })
       .notNull()
       .default("PENDIENTE"),
@@ -178,5 +260,259 @@ export const creditTransactions = sqliteTable("credit_transactions", {
     .default("COMPLETADO"),
   paymentProvider: text("payment_provider"),
   paymentProviderRef: text("payment_provider_ref"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const professionalPortfolioProjects = sqliteTable(
+  "professional_portfolio_projects",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    category: text("category").notNull(),
+    location: text("location").notNull(),
+    completionYear: integer("completion_year"),
+    status: text("status", { enum: ["PENDIENTE", "PUBLICADO", "RECHAZADO"] })
+      .notNull()
+      .default("PENDIENTE"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+);
+
+export const professionalPortfolioImages = sqliteTable(
+  "professional_portfolio_images",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    portfolioProjectId: integer("portfolio_project_id").notNull(),
+    professionalEmail: text("professional_email").notNull(),
+    phase: text("phase", { enum: ["ANTES", "DESPUES"] }).notNull(),
+    objectKey: text("object_key").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    altText: text("alt_text").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [uniqueIndex("professional_portfolio_images_object_key_idx").on(table.objectKey)],
+);
+
+export const structuredQuotes = sqliteTable(
+  "structured_quotes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull(),
+    professionalEmail: text("professional_email").notNull(),
+    title: text("title").notNull(),
+    notes: text("notes").notNull().default(""),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    taxCents: integer("tax_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    validUntil: text("valid_until").notNull(),
+    status: text("status", {
+      enum: ["BORRADOR", "ENVIADO", "ACEPTADO", "RECHAZADO", "EXPIRADO"],
+    })
+      .notNull()
+      .default("BORRADOR"),
+    acceptedAt: text("accepted_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("structured_quotes_project_professional_idx").on(
+      table.projectId,
+      table.professionalEmail,
+    ),
+  ],
+);
+
+export const structuredQuoteItems = sqliteTable("structured_quote_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  quoteId: integer("quote_id").notNull(),
+  category: text("category", {
+    enum: ["MANO_OBRA", "MATERIALES", "TRANSPORTE", "RESIDUOS", "OTROS"],
+  }).notNull(),
+  description: text("description").notNull(),
+  quantityMilli: integer("quantity_milli").notNull(),
+  unit: text("unit").notNull(),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  totalCents: integer("total_cents").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const workContracts = sqliteTable(
+  "work_contracts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull(),
+    quoteId: integer("quote_id").notNull(),
+    clientEmail: text("client_email").notNull(),
+    professionalEmail: text("professional_email").notNull(),
+    templateVersion: text("template_version").notNull(),
+    objectKey: text("object_key").notNull(),
+    documentSha256: text("document_sha256").notNull(),
+    status: text("status", { enum: ["BORRADOR", "PENDIENTE_FIRMA", "FIRMADO"] })
+      .notNull()
+      .default("PENDIENTE_FIRMA"),
+    clientAcceptedAt: text("client_accepted_at"),
+    professionalAcceptedAt: text("professional_accepted_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [uniqueIndex("work_contracts_project_idx").on(table.projectId)],
+);
+
+export const milestoneEvidence = sqliteTable("milestone_evidence", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  milestoneId: integer("milestone_id").notNull(),
+  projectId: integer("project_id").notNull(),
+  professionalEmail: text("professional_email").notNull(),
+  mediaType: text("media_type", { enum: ["FOTO", "VIDEO"] }).notNull(),
+  objectKey: text("object_key").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  description: text("description").notNull(),
+  capturedAt: text("captured_at"),
+  reviewStatus: text("review_status", {
+    enum: ["PENDIENTE", "ACEPTADA", "RECHAZADA"],
+  })
+    .notNull()
+    .default("PENDIENTE"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const propertyPassportEntries = sqliteTable("property_passport_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  milestoneId: integer("milestone_id"),
+  authorEmail: text("author_email").notNull(),
+  category: text("category", {
+    enum: ["INSTALACIONES", "MATERIALES", "PLANOS", "GARANTIAS", "MANTENIMIENTO"],
+  }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  objectKey: text("object_key"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const bilateralReviews = sqliteTable(
+  "bilateral_reviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull(),
+    authorEmail: text("author_email").notNull(),
+    subjectEmail: text("subject_email").notNull(),
+    direction: text("direction", {
+      enum: ["CLIENTE_A_PROFESIONAL", "PROFESIONAL_A_CLIENTE"],
+    }).notNull(),
+    rating: integer("rating").notNull(),
+    comment: text("comment").notNull(),
+    sealedUntil: text("sealed_until").notNull(),
+    status: text("status", { enum: ["SELLADA", "PUBLICADA", "OCULTA"] })
+      .notNull()
+      .default("SELLADA"),
+    publishedAt: text("published_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("bilateral_reviews_project_author_idx").on(
+      table.projectId,
+      table.authorEmail,
+    ),
+  ],
+);
+
+export const professionalInsurancePolicies = sqliteTable(
+  "professional_insurance_policies",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    insurer: text("insurer").notNull(),
+    policyNumberMasked: text("policy_number_masked").notNull(),
+    coverageCents: integer("coverage_cents").notNull(),
+    validFrom: text("valid_from").notNull(),
+    validUntil: text("valid_until").notNull(),
+    objectKey: text("object_key").notNull(),
+    verificationStatus: text("verification_status", {
+      enum: ["PENDIENTE", "APROBADA", "RECHAZADA", "EXPIRADA"],
+    })
+      .notNull()
+      .default("PENDIENTE"),
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+);
+
+export const professionalServiceAreas = sqliteTable(
+  "professional_service_areas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    professionalEmail: text("professional_email").notNull(),
+    serviceSlug: text("service_slug").notNull(),
+    citySlug: text("city_slug").notNull(),
+    cityName: text("city_name").notNull(),
+    provinceName: text("province_name").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("professional_service_areas_unique_idx").on(
+      table.professionalEmail,
+      table.serviceSlug,
+      table.citySlug,
+    ),
+  ],
+);
+
+export const projectInsuranceSelections = sqliteTable("project_insurance_selections", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  clientEmail: text("client_email").notNull(),
+  provider: text("provider"),
+  rateBasisPoints: integer("rate_basis_points").notNull().default(150),
+  premiumCents: integer("premium_cents"),
+  status: text("status", {
+    enum: ["NO_DISPONIBLE", "PENDIENTE", "ACTIVA", "CANCELADA"],
+  })
+    .notNull()
+    .default("NO_DISPONIBLE"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const conversations = sqliteTable(
+  "conversations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull(),
+    clientEmail: text("client_email").notNull(),
+    professionalEmail: text("professional_email").notNull(),
+    contactUnlockedAt: text("contact_unlocked_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("conversations_project_participants_idx").on(
+      table.projectId,
+      table.clientEmail,
+      table.professionalEmail,
+    ),
+  ],
+);
+
+export const conversationMessages = sqliteTable("conversation_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  conversationId: integer("conversation_id").notNull(),
+  senderEmail: text("sender_email").notNull(),
+  messageType: text("message_type", { enum: ["TEXTO", "AUDIO"] }).notNull(),
+  body: text("body"),
+  audioObjectKey: text("audio_object_key"),
+  blockedSensitiveData: integer("blocked_sensitive_data", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

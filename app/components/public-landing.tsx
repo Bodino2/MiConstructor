@@ -226,7 +226,7 @@ export default function PublicLanding() {
               <div className="public-pro-points">
                 <span><b>01</b> Test de conocimientos obligatorio al crear la cuenta</span>
                 <span><b>02</b> Documentación y especialidad revisadas antes de activar el perfil</span>
-                <span><b>03</b> Sin suscripción y sin comisión sobre el valor final de la obra</span>
+                <span><b>03</b> Sin suscripción; pago solo al ser seleccionado por un cliente</span>
               </div>
               <Link className="public-button public-button-bronze" href="/demo?registro=profesional">Crear cuenta profesional <span>↗</span></Link>
             </div>
@@ -247,18 +247,18 @@ export default function PublicLanding() {
                 <span className="public-kicker dark"><i /> PAGO SOLO POR CONTACTO CUALIFICADO</span>
                 <h2>Gratis hasta entrar<br/>en la shortlist.</h2>
               </div>
-              <p>La tarifa se fija por el presupuesto estimado cuando el cliente selecciona al profesional. El contacto se desbloquea después del cargo; MiConstructor no cobra ningún porcentaje sobre la obra contratada.</p>
+              <p>La tarifa de shortlist se calcula internamente según el valor estimado del proyecto. Las selecciones se agrupan en una factura semanal y se cobran por domiciliación bancaria obligatoria.</p>
             </div>
             <div className="public-shortlist-flow">
               <article><b>01</b><span>Registro y proyectos</span><strong>0 €</strong><p>Crear el perfil, superar la verificación y consultar oportunidades no tiene coste.</p></article>
-              <article><b>02</b><span>Selección del cliente</span><strong>Tarifa por tramo</strong><p>El valor estimado del proyecto determina una tarifa de lead clara y conocida.</p></article>
-              <article><b>03</b><span>Contacto desbloqueado</span><strong>Sin comisión final</strong><p>Se carga el saldo o el método autorizado. El importe de la obra queda fuera de la comisión.</p></article>
+              <article><b>02</b><span>Selección del cliente</span><strong>Tarifa conocida</strong><p>El profesional recibe el importe aplicable a ese contacto dentro de su panel.</p></article>
+              <article><b>03</b><span>Facturación profesional</span><strong>Cierre semanal</strong><p>Las selecciones se agrupan y cobran mediante domiciliación bancaria.</p></article>
             </div>
             <div className="public-pricing-examples" aria-label="Ejemplos de tarifas de shortlist">
-              <span><small>Proyecto hasta 2.500 €</small><strong>8,90 €</strong></span>
-              <span><small>Proyecto de 7.501 € a 15.000 €</small><strong>24,90 €</strong></span>
-              <span><small>Proyecto de 30.001 € a 60.000 €</small><strong>59,90 €</strong></span>
-              <em>Tarifas MVP orientativas · IVA y condiciones definitivas pendientes de validación comercial.</em>
+              <span><small>ALTA Y CONSULTA</small><strong>Sin coste</strong></span>
+              <span><small>COBRO DE SELECCIONES</small><strong>Semanal</strong></span>
+              <span><small>MÉTODO OBLIGATORIO</small><strong>Domiciliación</strong></span>
+              <em>Un impago suspende la cuenta profesional hasta liquidar íntegramente el saldo pendiente.</em>
             </div>
           </div>
         </section>

@@ -10,10 +10,29 @@ Drizzle.
   documental antes de poder enviar propuestas o recibir contactos.
 - MiConstructor cobra una tarifa de lead cuando el cliente añade al profesional
   a la shortlist. La tarifa se calcula sobre el presupuesto estimado del
-  proyecto en ese momento.
+  proyecto en ese momento: 5% hasta 1.500 €, 4% entre 1.500,01 € y 10.000 €, y
+  3% por encima de 10.000 €.
 - El contacto permanece bloqueado hasta confirmar el débito de créditos o el
   pago externo.
-- No existe comisión porcentual sobre el importe final de la obra.
+- La tarifa se cobra una sola vez por la selección y no se recalcula sobre el
+  importe final facturado de la obra.
+- Las selecciones se agrupan en una factura semanal y se cobran mediante
+  domiciliación bancaria SEPA. Un adeudo fallido suspende automáticamente la
+  cuenta hasta pagar íntegramente el saldo vencido.
+- Los porcentajes de cálculo son configuración interna y no se muestran en las
+  páginas públicas.
+
+## Producto
+
+- Estimador orientativo por tipo de obra, superficie y calidades, con desglose
+  de mano de obra, materiales y residuos/permisos.
+- Devize estructurate por partidas y contrato PDF generado al aceptar.
+- Diario de Obra con evidencias por hito y Pasaporte Digital del inmueble.
+- Reseñas bilaterales double-blind, limitadas a proyectos finalizados y pagados.
+- Portfolio moderado con imágenes de antes/después y póliza RC verificable.
+- Chat con filtro anti-bypass antes del desbloqueo del contacto.
+- Páginas locales de servicio y guías de precios con sitemap, FAQ y datos
+  estructurados basados únicamente en profesionales y reseñas reales.
 
 Rutas principales:
 
