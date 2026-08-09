@@ -1,38 +1,76 @@
 import Link from "next/link";
+import BrandLogo, { BrandMark } from "./brand-logo";
 
-const processSteps = [
+type IconName = "brief" | "compare" | "milestone" | "shield" | "document" | "layers";
+
+const processSteps: Array<{
+  number: string;
+  icon: IconName;
+  title: string;
+  copy: string;
+  detail: string;
+}> = [
   {
     number: "01",
-    icon: "▤",
-    title: "Cuéntanos tu proyecto",
-    copy: "Describe la reforma, añade la ubicación y marca un presupuesto. Te guiamos paso a paso.",
+    icon: "brief",
+    title: "Define bien el proyecto",
+    copy: "Describe el alcance, la ubicación, el plazo y el presupuesto con una guía que ordena la información desde el inicio.",
+    detail: "Brief estructurado",
   },
   {
     number: "02",
-    icon: "◎",
-    title: "Compara profesionales",
-    copy: "Recibe propuestas de empresas verificadas y compara precio, plazo, experiencia y valoraciones.",
+    icon: "compare",
+    title: "Compara con criterio",
+    copy: "Analiza propuestas de profesionales verificados por precio, calendario, especialidad y documentación disponible.",
+    detail: "Decisión informada",
   },
   {
     number: "03",
-    icon: "✓",
-    title: "Avanza por hitos",
-    copy: "Cada etapa queda documentada. Revisa el trabajo y mantén el control sobre el siguiente paso.",
+    icon: "milestone",
+    title: "Controla cada avance",
+    copy: "Divide el trabajo en hitos, registra evidencias y conserva una trazabilidad clara de acuerdos, cambios y aprobaciones.",
+    detail: "Seguimiento por hitos",
   },
 ];
 
 const milestones = [
-  ["Reserva y planificación", "1.200 €", "done"],
+  ["Planificación y reserva", "1.200 €", "done"],
   ["Demolición y preparación", "3.000 €", "done"],
   ["Instalaciones y albañilería", "5.000 €", "active"],
   ["Acabados y entrega", "2.800 €", "locked"],
 ];
 
-function PublicLogo() {
+const trustItems: Array<{ icon: IconName; title: string; copy: string }> = [
+  { icon: "shield", title: "Perfiles verificados", copy: "Identidad y documentación visibles antes de decidir." },
+  { icon: "layers", title: "Hitos trazables", copy: "Alcance, importe y estado claros en cada etapa." },
+  { icon: "document", title: "Todo documentado", copy: "Propuestas, evidencias y aprobaciones en un mismo lugar." },
+];
+
+function LineIcon({ name }: { name: IconName }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {name === "brief" && <><path {...common} d="M6 3.5h9l3 3V20.5H6z"/><path {...common} d="M15 3.5v3h3M9 11h6M9 15h4"/></>}
+      {name === "compare" && <><path {...common} d="M5 5h6v6H5zM13 13h6v6h-6z"/><path {...common} d="M14 6h5M16.5 3.5V8.5M5 16h5M7.5 13.5v5"/></>}
+      {name === "milestone" && <><path {...common} d="M5 4v16M5 7h8l-1.6 3L13 13H5"/><path {...common} d="M16 16.5l1.7 1.7L21 14.5"/></>}
+      {name === "shield" && <><path {...common} d="M12 3.5 19 6v5.5c0 4.1-2.8 7.2-7 9-4.2-1.8-7-4.9-7-9V6z"/><path {...common} d="m8.7 12 2.1 2.1 4.5-4.5"/></>}
+      {name === "document" && <><path {...common} d="M6 3.5h9l3 3V20.5H6z"/><path {...common} d="M15 3.5v3h3M9 11h6M9 15h6M9 18h3"/></>}
+      {name === "layers" && <><path {...common} d="m12 3.5 8 4.2-8 4.2-8-4.2zM4 12l8 4.2 8-4.2M4 16.3l8 4.2 8-4.2"/></>}
+    </svg>
+  );
+}
+
+function PublicLogo({ inverse = false }: { inverse?: boolean }) {
   return (
     <Link className="public-logo" href="/" aria-label="MiConstructor, página principal">
-      <span className="public-logo-mark">⌂</span>
-      <strong>Mi<span>Constructor</span></strong>
+      <BrandLogo inverse={inverse} />
     </Link>
   );
 }
@@ -40,87 +78,148 @@ function PublicLogo() {
 export default function PublicLanding() {
   return (
     <div className="public-site">
+      <div className="public-topline">
+        <div className="public-container">
+          <span>MiConstructor está en fase MVP</span>
+          <span>Demo abierta · Sin registro</span>
+        </div>
+      </div>
+
       <header className="public-header">
         <div className="public-container public-header-inner">
           <PublicLogo />
           <nav aria-label="Navegación del sitio">
             <a href="#como-funciona">Cómo funciona</a>
+            <a href="#seguridad">Control y seguridad</a>
             <a href="#profesionales">Para profesionales</a>
-            <a href="#seguridad">Seguridad</a>
-            <Link className="public-nav-demo" href="/demo">Ver demo</Link>
-            <Link className="public-button public-button-primary" href="/demo">Publicar proyecto <span>→</span></Link>
           </nav>
+          <div className="public-header-actions">
+            <Link className="public-nav-demo" href="/demo">Ver plataforma</Link>
+            <Link className="public-button public-button-primary" href="/demo">Publicar proyecto <span>↗</span></Link>
+          </div>
         </div>
       </header>
 
       <main>
         <section className="public-hero">
-          <div className="public-grid-pattern" />
+          <div className="public-hero-grid" aria-hidden="true" />
           <div className="public-container public-hero-inner">
             <div className="public-hero-copy">
-              <span className="public-kicker">✓ PROFESIONALES VERIFICADOS · CONTROL POR HITOS</span>
-              <h1>Tu reforma,<br/><em>bajo control</em><br/>de principio a fin.</h1>
+              <span className="public-kicker"><i /> PLATAFORMA SAAS PARA REFORMAS</span>
+              <h1>Construir bien empieza por <em>controlar cada decisión.</em></h1>
               <p>
-                Publica tu proyecto, compara propuestas y avanza por etapas con
-                total transparencia. Toda la información de tu obra, en un solo lugar.
+                MiConstructor conecta clientes y profesionales en un espacio de trabajo común:
+                propuestas comparables, presupuesto por hitos, evidencias y seguimiento de principio a fin.
               </p>
               <div className="public-hero-actions">
                 <Link className="public-button public-button-primary public-button-large" href="/demo">
-                  Publicar mi proyecto <span>→</span>
+                  Publicar un proyecto <span>↗</span>
                 </Link>
-                <a className="public-how-link" href="#como-funciona"><i>▶</i> Descubre cómo funciona</a>
+                <Link className="public-button public-button-quiet public-button-large" href="/demo">
+                  Explorar la demo <span>→</span>
+                </Link>
               </div>
-              <div className="public-social-proof">
-                <div className="public-avatars"><span>RS</span><span>AM</span><span>JF</span><span>+2k</span></div>
-                <div><strong>4,8/5 <b>★★★★★</b></strong><small>Valoración de clientes y profesionales</small></div>
+              <div className="public-hero-assurance">
+                <span><b>01</b> Profesionales verificados</span>
+                <span><b>02</b> Control por hitos</span>
+                <span><b>03</b> Evidencias centralizadas</span>
               </div>
             </div>
 
-            <div className="public-hero-visual" aria-label="Vista de ejemplo de un proyecto de reforma">
-              <div className="public-blueprint">
-                <div className="public-blueprint-toolbar"><i/><i/><i/><span>PLANO · COCINA</span></div>
-                <div className="public-floorplan">
-                  <span className="room-kitchen">COCINA<small>14,5 m²</small></span>
-                  <span className="room-dining">COMEDOR<small>21,8 m²</small></span>
-                  <span className="room-laundry">LAVADO<small>4,2 m²</small></span>
+            <div className="public-product-stage" aria-label="Vista de la plataforma MiConstructor con un proyecto de reforma">
+              <div className="public-stage-measure measure-top">12,40 m</div>
+              <div className="public-stage-measure measure-side">8,70 m</div>
+              <div className="public-platform-window">
+                <header>
+                  <span className="public-window-brand"><BrandMark /> MC / OBRA 024</span>
+                  <span className="public-window-status"><i /> Proyecto en curso</span>
+                  <span className="public-window-menu">•••</span>
+                </header>
+                <div className="public-window-body">
+                  <aside aria-hidden="true">
+                    <span className="active" />
+                    <span />
+                    <span />
+                    <span />
+                    <span />
+                  </aside>
+                  <div className="public-window-main">
+                    <div className="public-window-title">
+                      <div><small>PROYECTO</small><strong>Reforma integral de vivienda</strong></div>
+                      <b>58%</b>
+                    </div>
+                    <div className="public-window-progress"><i /></div>
+                    <div className="public-window-metrics">
+                      <span><small>Presupuesto</small><strong>42.500 €</strong></span>
+                      <span><small>Hito activo</small><strong>03 / 05</strong></span>
+                      <span><small>Próxima revisión</small><strong>18 AGO</strong></span>
+                    </div>
+                    <div className="public-window-detail">
+                      <div className="public-elevation" aria-hidden="true">
+                        <span className="elevation-roof" />
+                        <span className="elevation-left" />
+                        <span className="elevation-right" />
+                        <span className="elevation-door" />
+                        <span className="elevation-window-one" />
+                        <span className="elevation-window-two" />
+                      </div>
+                      <div className="public-window-list">
+                        <small>ÚLTIMOS AVANCES</small>
+                        <span><i className="done" /> Instalación eléctrica <b>Listo</b></span>
+                        <span><i className="active" /> Tabiquería interior <b>En curso</b></span>
+                        <span><i /> Revisión del cliente <b>Pendiente</b></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="public-float-card public-project-card">
-                <div className="public-card-label"><i/> Proyecto en curso <b>58%</b></div>
-                <strong>Reforma integral de cocina</strong>
-                <small>⌖ Linares, Jaén</small>
-                <div className="public-progress"><i style={{ width: "58%" }}/></div>
-                <div className="public-dot-line"><span>✓</span><i/><span>✓</span><i/><span className="active">3</span><i/><span>4</span></div>
+              <div className="public-stage-card public-stage-verified">
+                <span><LineIcon name="shield" /></span>
+                <div><small>PROFESIONAL VERIFICADO</small><strong>Construcciones Serrano</strong></div>
+                <b>PRO</b>
               </div>
-              <div className="public-float-card public-secure-card">
-                <span>▣</span><div><strong>Control por hitos</strong><small>5.000 € asignados al hito activo</small></div>
+              <div className="public-stage-card public-stage-hito">
+                <small>HITO 03 · EN CURSO</small>
+                <div><strong>10.800 €</strong><span>Importe asignado</span></div>
+                <i><b /></i>
               </div>
-              <div className="public-verified"><b>✓</b><span><strong>Profesional verificado</strong><small>Documentación revisada</small></span></div>
+              <span className="public-demo-label">INTERFAZ DEMOSTRATIVA · DATOS DE EJEMPLO</span>
             </div>
           </div>
+        </section>
 
-          <div className="public-container public-stats">
-            <div><strong>2.400+</strong><span>Profesionales verificados</span></div>
-            <div><strong>8,7 M€</strong><span>En proyectos gestionados*</span></div>
-            <div><strong>96%</strong><span>Proyectos sin incidencias*</span></div>
-            <div><strong>24 h</strong><span>Primera propuesta de media*</span></div>
+        <section className="public-trust" aria-label="Principios de la plataforma">
+          <div className="public-container public-trust-grid">
+            <div className="public-trust-intro">
+              <span>UNA BASE MÁS SÓLIDA</span>
+              <strong>Menos incertidumbre.<br/>Más trazabilidad.</strong>
+            </div>
+            {trustItems.map((item) => (
+              <article key={item.title}>
+                <i><LineIcon name={item.icon} /></i>
+                <div><strong>{item.title}</strong><p>{item.copy}</p></div>
+              </article>
+            ))}
           </div>
         </section>
 
         <section className="public-section public-process" id="como-funciona">
           <div className="public-container">
-            <div className="public-section-heading">
-              <span className="public-kicker dark">ASÍ DE SENCILLO</span>
-              <h2>De la idea a la obra terminada,<br/>sin perder el control.</h2>
-              <p>Un proceso claro para tomar mejores decisiones y reducir las sorpresas.</p>
+            <div className="public-section-heading public-section-heading-split">
+              <div>
+                <span className="public-kicker dark"><i /> DEL BRIEF A LA ENTREGA</span>
+                <h2>La obra deja de ser<br/>una caja negra.</h2>
+              </div>
+              <p>Un proceso compartido entre cliente y profesional, diseñado para saber qué se acordó, qué está ocurriendo y qué viene después.</p>
             </div>
             <div className="public-steps">
               {processSteps.map((step) => (
                 <article key={step.number}>
-                  <span className="public-step-number">{step.number}</span>
-                  <i className="public-step-icon">{step.icon}</i>
+                  <header><span>{step.number}</span><small>{step.detail}</small></header>
+                  <i className="public-step-icon"><LineIcon name={step.icon} /></i>
                   <h3>{step.title}</h3>
                   <p>{step.copy}</p>
+                  <span className="public-step-line" />
                 </article>
               ))}
             </div>
@@ -129,65 +228,82 @@ export default function PublicLanding() {
 
         <section className="public-section public-control" id="seguridad">
           <div className="public-container public-control-grid">
-            <div className="public-milestone-board">
-              <header><span>Estado del proyecto</span><b>58% completado</b></header>
-              {milestones.map(([name, amount, state], index) => (
-                <div className={`public-milestone ${state}`} key={name}>
-                  <span>{state === "done" ? "✓" : state === "active" ? index + 1 : "▣"}</span>
-                  <div><strong>{name}</strong><small>{state === "done" ? "Completado y aprobado" : state === "active" ? "En curso · Pendiente de revisión" : "Pendiente"}</small></div>
-                  <b>{amount}</b>
-                </div>
-              ))}
-              <footer><span>Presupuesto total</span><strong>12.000 €</strong></footer>
-            </div>
             <div className="public-control-copy">
-              <span className="public-kicker dark">CONTROL FINANCIERO</span>
-              <h2>El presupuesto avanza<br/>al ritmo de la obra.</h2>
-              <p>Organiza el importe por hitos verificables. Cada etapa queda documentada y puedes ver qué está aprobado, activo o pendiente.</p>
+              <span className="public-kicker dark"><i /> CONTROL FINANCIERO Y OPERATIVO</span>
+              <h2>El presupuesto avanza al ritmo real de la obra.</h2>
+              <p>Organiza el importe por hitos verificables. Cada etapa conserva su alcance, sus evidencias y su estado de aprobación.</p>
               <ul>
-                <li><b>✓</b><span><strong>Presupuesto sin sorpresas</strong><small>Importes y alcance definidos antes de empezar.</small></span></li>
-                <li><b>✓</b><span><strong>Evidencias en cada etapa</strong><small>Fotos, documentos y confirmaciones centralizados.</small></span></li>
-                <li><b>✓</b><span><strong>Periodo de revisión</strong><small>Tiempo para comprobar el resultado antes de cerrar el hito.</small></span></li>
+                <li><b>01</b><span><strong>Alcance e importe definidos</strong><small>Cada fase empieza con expectativas visibles para ambas partes.</small></span></li>
+                <li><b>02</b><span><strong>Evidencias en contexto</strong><small>Fotos, documentos, cambios y confirmaciones vinculados al hito.</small></span></li>
+                <li><b>03</b><span><strong>Periodo de revisión</strong><small>Tiempo para comprobar el resultado antes de cerrar una etapa.</small></span></li>
               </ul>
-              <small className="public-legal-note">* El depósito en garantía mostrado es una simulación del MVP. Los pagos reales requerirán un proveedor autorizado y condiciones legales definitivas.</small>
+              <small className="public-legal-note">El depósito en garantía y los pagos mostrados forman parte de la simulación del MVP. La operación con dinero real requerirá un proveedor autorizado y condiciones legales definitivas.</small>
+            </div>
+            <div className="public-milestone-shell">
+              <div className="public-milestone-board">
+                <header>
+                  <div><small>OBRA 024</small><strong>Control de hitos</strong></div>
+                  <b><i /> 58% completado</b>
+                </header>
+                {milestones.map(([name, amount, state], index) => (
+                  <div className={`public-milestone ${state}`} key={name}>
+                    <span>{state === "done" ? "✓" : String(index + 1).padStart(2, "0")}</span>
+                    <div><strong>{name}</strong><small>{state === "done" ? "Completado y aprobado" : state === "active" ? "En curso · Pendiente de revisión" : "Bloqueado hasta completar el hito anterior"}</small></div>
+                    <b>{amount}</b>
+                  </div>
+                ))}
+                <footer><span>Presupuesto del proyecto</span><strong>12.000 €</strong></footer>
+              </div>
+              <span className="public-security-seal"><LineIcon name="shield" /><b>TRAZABILIDAD</b><small>Registro de actividad</small></span>
             </div>
           </div>
         </section>
 
         <section className="public-section public-professionals" id="profesionales">
-          <div className="public-container public-pro-card">
-            <div>
-              <span className="public-kicker">PARA PROFESIONALES</span>
-              <h2>Más proyectos adecuados.<br/>Menos tiempo buscando.</h2>
-              <p>Crea un perfil verificado, recibe oportunidades por zona y especialidad y gestiona propuestas, hitos y documentación desde un solo lugar.</p>
-              <Link className="public-button public-button-white" href="/demo">Ver el espacio profesional <span>→</span></Link>
+          <div className="public-container public-pro-grid">
+            <div className="public-pro-copy">
+              <span className="public-kicker"><i /> ESPACIO PROFESIONAL</span>
+              <h2>Proyectos adecuados.<br/>Gestión sin ruido.</h2>
+              <p>MiConstructor reúne oportunidades, propuestas, documentación e hitos para que el profesional dedique menos tiempo a perseguir información y más a ejecutar bien.</p>
+              <div className="public-pro-points">
+                <span><b>01</b> Oportunidades por zona y especialidad</span>
+                <span><b>02</b> Propuestas con alcance estructurado</span>
+                <span><b>03</b> Historial compartido con el cliente</span>
+              </div>
+              <Link className="public-button public-button-bronze" href="/demo">Explorar como profesional <span>↗</span></Link>
             </div>
             <div className="public-opportunities">
-              <header>Nuevas oportunidades cerca de ti <b>12</b></header>
-              <article><i>▦</i><div><strong>Renovación de baño principal</strong><small>Úbeda, Jaén · 6.800 €</small></div><span>→</span></article>
-              <article><i>▦</i><div><strong>Aislamiento y fachada exterior</strong><small>Baeza, Jaén · 18.500 €</small></div><span>→</span></article>
-              <article><i>▦</i><div><strong>Reforma integral de vivienda</strong><small>Linares, Jaén · 32.000 €</small></div><span>→</span></article>
+              <header><div><small>PANEL PROFESIONAL</small><strong>Oportunidades seleccionadas</strong></div><b>03</b></header>
+              <article><i>01</i><div><strong>Renovación de baño principal</strong><small>Úbeda, Jaén · Fontanería y acabados</small></div><b>6.800 €</b></article>
+              <article className="featured"><i>02</i><div><strong>Aislamiento y fachada exterior</strong><small>Baeza, Jaén · Eficiencia energética</small></div><b>18.500 €</b></article>
+              <article><i>03</i><div><strong>Reforma integral de vivienda</strong><small>Linares, Jaén · Proyecto completo</small></div><b>32.000 €</b></article>
+              <footer><span>Vista de demostración</span><Link href="/demo">Abrir panel <b>→</b></Link></footer>
             </div>
           </div>
         </section>
 
         <section className="public-final-cta">
+          <div className="public-final-grid" aria-hidden="true" />
           <div className="public-container">
-            <span className="public-kicker dark">TU PROYECTO EMPIEZA AQUÍ</span>
-            <h2>Construye con claridad.<br/>Decide con confianza.</h2>
-            <p>Explora el prototipo completo de MiConstructor sin registrarte.</p>
-            <Link className="public-button public-button-primary public-button-large" href="/demo">Entrar en la demo <span>→</span></Link>
+            <span className="public-kicker"><i /> TU PROYECTO EMPIEZA AQUÍ</span>
+            <h2>Una forma más clara<br/>de construir confianza.</h2>
+            <p>Explora el prototipo completo de MiConstructor. Sin registro y con datos de demostración.</p>
+            <div>
+              <Link className="public-button public-button-primary public-button-large" href="/demo">Entrar en la plataforma <span>↗</span></Link>
+              <a className="public-button public-button-outline-light public-button-large" href="#como-funciona">Revisar el proceso</a>
+            </div>
           </div>
         </section>
       </main>
 
       <footer className="public-footer">
         <div className="public-container public-footer-main">
-          <PublicLogo />
-          <p>La plataforma que organiza reformas con claridad, trazabilidad y confianza.</p>
-          <nav><a href="#como-funciona">Cómo funciona</a><a href="#seguridad">Seguridad</a><Link href="/demo">Demo</Link></nav>
+          <div><PublicLogo inverse /><p>La capa digital entre tu idea y la obra terminada.</p></div>
+          <nav><strong>PLATAFORMA</strong><a href="#como-funciona">Cómo funciona</a><a href="#seguridad">Control y seguridad</a><Link href="/demo">Demo interactiva</Link></nav>
+          <nav><strong>MI CONSTRUCTOR</strong><a href="#profesionales">Para profesionales</a><span>Privacidad</span><span>Aviso legal</span></nav>
+          <div className="public-footer-status"><i /> MVP EN DESARROLLO<small>Linares · España</small></div>
         </div>
-        <div className="public-container public-footer-bottom"><span>© 2026 MiConstructor. MVP en desarrollo.</span><span>Privacidad · Aviso legal · Cookies</span></div>
+        <div className="public-container public-footer-bottom"><span>© 2026 MiConstructor</span><span>Proyectos que avanzan con control.</span></div>
       </footer>
     </div>
   );
