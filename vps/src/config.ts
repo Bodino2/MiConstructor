@@ -27,6 +27,12 @@ const envSchema = z.object({
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   BILLING_JOB_SECRET: z.string().min(24),
   ADMIN_EMAIL: z.string().email(),
+  PUBLIC_CONTACT_EMAIL: z.string().email().optional(),
+  PUBLIC_CONTACT_PHONE: z.string().trim().min(6).max(40).optional(),
+  LEGAL_ENTITY_NAME: z.string().trim().min(2).max(200).optional(),
+  LEGAL_TAX_ID: z.string().trim().min(3).max(60).optional(),
+  LEGAL_ADDRESS: z.string().trim().min(5).max(300).optional(),
+  LEGAL_REGISTRY: z.string().trim().min(3).max(500).optional(),
   REQUIRE_EXTERNAL_SERVICES: booleanValue,
   TRUST_PROXY: z.coerce.number().int().min(0).max(2).default(1),
 });
@@ -51,9 +57,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       ["STRIPE_SECRET_KEY", config.STRIPE_SECRET_KEY],
       ["STRIPE_WEBHOOK_SECRET", config.STRIPE_WEBHOOK_SECRET],
       ["STRIPE_PUBLISHABLE_KEY", config.STRIPE_PUBLISHABLE_KEY],
+      ["LEGAL_ENTITY_NAME", config.LEGAL_ENTITY_NAME],
+      ["LEGAL_TAX_ID", config.LEGAL_TAX_ID],
+      ["LEGAL_ADDRESS", config.LEGAL_ADDRESS],
+      ["LEGAL_REGISTRY", config.LEGAL_REGISTRY],
     ].filter(([, value]) => !value).map(([name]) => name);
     if (missing.length) {
-      throw new Error(`Faltan servicios externos obligatorios: ${missing.join(", ")}`);
+      throw new Error(`Faltan servicios externos o datos legales obligatorios: ${missing.join(", ")}`);
     }
     if (!config.APP_URL.startsWith("https://")) {
       throw new Error("APP_URL debe usar HTTPS en producción.");
@@ -63,9 +73,26 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
 }
 
 export function publicRuntimeConfig(config: AppConfig) {
+  const contactEmail = config.PUBLIC_CONTACT_EMAIL ?? config.ADMIN_EMAIL;
+  const legalIdentityComplete = Boolean(
+    config.LEGAL_ENTITY_NAME
+    && config.LEGAL_TAX_ID
+    && config.LEGAL_ADDRESS
+    && config.LEGAL_REGISTRY,
+  );
   return {
     appUrl: config.APP_URL,
     stripePublishableKey: config.STRIPE_PUBLISHABLE_KEY ?? null,
     billingEnabled: Boolean(config.STRIPE_SECRET_KEY && config.STRIPE_WEBHOOK_SECRET),
+    contactEmail,
+    contactPhone: config.PUBLIC_CONTACT_PHONE ?? null,
+    legalEntityName: config.LEGAL_ENTITY_NAME ?? null,
+    legalTaxId: config.LEGAL_TAX_ID ?? null,
+    legalAddress: config.LEGAL_ADDRESS ?? null,
+    legalRegistry: config.LEGAL_REGISTRY ?? null,
+    legalIdentityComplete,
+    privacyVersion: "2026-08-10",
+    termsVersion: "2026-08-10",
+    sepaTermsVersion: "2026-08-10",
   };
 }
