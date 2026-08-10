@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "MiConstructor",
+    "slug": "miconstructor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "miconstructor",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "es.miconstructor.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "es.miconstructor.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#F4F5F7"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://miconstructor.es"
+    }
+  }
+}

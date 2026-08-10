@@ -14,6 +14,7 @@ import { billingRouter, stripeWebhookHandler } from "./routes/billing.js";
 import { executionRouter } from "./routes/execution.js";
 import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./routes/legal-support.js";
 import { marketplaceRouter } from "./routes/marketplace.js";
+import { mobileAuthRouter } from "./routes/mobile-auth.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
@@ -86,6 +87,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
 
   app.get("/api/v1/config", (_request, response) => response.json(publicRuntimeConfig(config)));
   app.post("/api/v1/auth/register", registrationLegalGate);
+  app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
