@@ -81,10 +81,10 @@ function renderShell() {
       ${sidebar()}
       <section>
         <div class="tabs admin-tabs">
-          <button class="active" data-admin-tab="reviews">Verificaciones</button>
-          <button data-admin-tab="users">Utilizatori</button>
-          <button data-admin-tab="projects">Proiecte</button>
-          <button data-admin-tab="audit">Audit</button>
+          <button class="${adminState.tab === "reviews" ? "active" : ""}" data-admin-tab="reviews">Verificaciones</button>
+          <button class="${adminState.tab === "users" ? "active" : ""}" data-admin-tab="users">Usuarios</button>
+          <button class="${adminState.tab === "projects" ? "active" : ""}" data-admin-tab="projects">Proyectos</button>
+          <button class="${adminState.tab === "audit" ? "active" : ""}" data-admin-tab="audit">Auditoría</button>
         </div>
         <div id="admin-content"></div>
       </section>
@@ -180,7 +180,7 @@ function bindUserActions() {
       adminState.users = null;
       adminState.audit = null;
       adminState.overview = await api("/api/v1/admin/overview");
-      await renderUsers();
+      renderShell();
     } catch (error) { notify(error.message, true); }
   }));
 }
