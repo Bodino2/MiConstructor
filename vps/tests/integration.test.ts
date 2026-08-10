@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { createDatabase } from "../src/db.js";
 import { migrate } from "../src/migrate.js";
+import { hashPassword } from "../src/services/crypto.js";
 import { PrivateStorage } from "../src/services/storage.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:5432/miconstructor_test";
@@ -141,6 +143,84 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
   assert.equal(duplicate.status, 200);
   const count = await database.query<{ count: string }>("SELECT count(*)::text AS count FROM billable_items WHERE professional_id = $1", [professionalId]);
   assert.equal(count.rows[0]!.count, "1");
+});
+
+test("el panel admin controla cuentas y expone overview, proyectos y auditoría", async () => {
+  const adminId = randomUUID();
+  const targetId = randomUUID();
+  const adminPassword = "Admin-Seguro-2026-Test";
+  const targetPassword = "Cliente-Seguro-2026-Test";
+  const [adminHash, targetHash] = await Promise.all([
+    hashPassword(adminPassword, config.SESSION_PEPPER),
+    hashPassword(targetPassword, config.SESSION_PEPPER),
+  ]);
+
+  await database.query(
+    `INSERT INTO users
+      (id, email, name, password_hash, role, tax_id, email_verified, account_status,
+       verification_status, privacy_version, privacy_accepted_at)
+     VALUES
+      ($1, 'admin-test@miconstructor.es', 'Admin Test', $2, 'admin', $3, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now()),
+      ($4, 'cuenta-control@example.es', 'Cuenta Control', $5, 'cliente', $6, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now())`,
+    [adminId, adminHash, `ADMIN-${adminId}`, targetId, targetHash, `CLIENT-${targetId}`],
+  );
+
+  const anonymous = await request(application).get("/api/v1/admin/overview");
+  assert.equal(anonymous.status, 401);
+
+  const adminAgent = request.agent(application);
+  const login = await adminAgent.post("/api/v1/auth/login").send({ email: "admin-test@miconstructor.es", password: adminPassword });
+  assert.equal(login.status, 200, login.text);
+  assert.equal(login.body.user.role, "admin");
+
+  const overview = await adminAgent.get("/api/v1/admin/overview");
+  assert.equal(overview.status, 200, overview.text);
+  assert.ok(overview.body.usersTotal >= 2);
+  assert.ok(overview.body.projectsTotal >= 1);
+
+  const users = await adminAgent.get("/api/v1/admin/users?limit=200");
+  assert.equal(users.status, 200, users.text);
+  assert.ok(users.body.users.some((user: { id: string }) => user.id === targetId));
+
+  const projects = await adminAgent.get("/api/v1/admin/projects?limit=200");
+  assert.equal(projects.status, 200, projects.text);
+  assert.ok(projects.body.projects.length >= 1);
+
+  const cannotSuspendAdmin = await adminAgent.post(`/api/v1/admin/users/${adminId}/account-status`).send({
+    action: "SUSPENDER",
+    reason: "No debe permitirse suspender administradores desde el panel.",
+  });
+  assert.equal(cannotSuspendAdmin.status, 400);
+
+  const suspended = await adminAgent.post(`/api/v1/admin/users/${targetId}/account-status`).send({
+    action: "SUSPENDER",
+    reason: "Suspensión controlada para validar el flujo administrativo.",
+  });
+  assert.equal(suspended.status, 200, suspended.text);
+  assert.equal(suspended.body.status, "SUSPENDIDO");
+
+  const blockedLogin = await request(application).post("/api/v1/auth/login").send({
+    email: "cuenta-control@example.es",
+    password: targetPassword,
+  });
+  assert.equal(blockedLogin.status, 423, blockedLogin.text);
+
+  const auditLog = await adminAgent.get("/api/v1/admin/audit?limit=200");
+  assert.equal(auditLog.status, 200, auditLog.text);
+  assert.ok(auditLog.body.events.some((event: { action: string; entity_id: string }) => event.action === "USER_ACCOUNT_SUSPENDED" && event.entity_id === targetId));
+
+  const reactivated = await adminAgent.post(`/api/v1/admin/users/${targetId}/account-status`).send({
+    action: "REACTIVAR",
+    reason: "Cuenta revisada y reactivada después de la comprobación.",
+  });
+  assert.equal(reactivated.status, 200, reactivated.text);
+  assert.equal(reactivated.body.status, "ACTIVO");
+
+  const restoredLogin = await request(application).post("/api/v1/auth/login").send({
+    email: "cuenta-control@example.es",
+    password: targetPassword,
+  });
+  assert.equal(restoredLogin.status, 200, restoredLogin.text);
 });
 
 test("las rutas privadas rechazan usuarios anónimos", async () => {
