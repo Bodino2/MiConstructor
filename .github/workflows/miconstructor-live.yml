@@ -1,0 +1,30 @@
+name: MiConstructor Live CI
+
+on:
+  push:
+    branches:
+      - main
+      - agent/miconstructor-live-foundation
+    paths:
+      - 'miconstructor-live/**'
+      - '.github/workflows/miconstructor-live.yml'
+  pull_request:
+    paths:
+      - 'miconstructor-live/**'
+      - '.github/workflows/miconstructor-live.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: miconstructor-live
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run tests
+        env:
+          NODE_ENV: test
+        run: npm test
