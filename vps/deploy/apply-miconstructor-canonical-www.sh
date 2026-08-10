@@ -10,6 +10,12 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 1
 fi
 
+if grep -Fq '# MICONSTRUCTOR_CANONICAL_WWW_SERVER_BEGIN' "$CONFIG_FILE"; then
+  echo "Canonical www redirect already configured with dedicated server blocks."
+  "$NGINX_BIN" -t
+  exit 0
+fi
+
 BACKUP="${CONFIG_FILE}.before-canonical-$(date +%Y%m%d-%H%M%S)"
 cp -a "$CONFIG_FILE" "$BACKUP"
 
@@ -21,17 +27,11 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
-# Remove the first-generation in-block redirect and any previously generated
-# dedicated www blocks so this helper stays idempotent.
+# Remove the first-generation in-block redirect. It passed nginx -t but did
+# not reliably canonicalize the real Certbot-generated virtual hosts.
 text = re.sub(
     r"\n\s*# MICONSTRUCTOR_CANONICAL_WWW_BEGIN.*?# MICONSTRUCTOR_CANONICAL_WWW_END",
     "",
-    text,
-    flags=re.S,
-)
-text = re.sub(
-    r"\n?# MICONSTRUCTOR_CANONICAL_WWW_SERVER_BEGIN.*?# MICONSTRUCTOR_CANONICAL_WWW_SERVER_END\n?",
-    "\n",
     text,
     flags=re.S,
 )
@@ -68,12 +68,6 @@ for start, end in spans:
         matching.append((start, end, block))
 
 if not matching:
-    # Already transformed configurations declare root and www separately.
-    has_root = re.search(r"server_name\s+miconstructor\.es\s*;", text)
-    has_www = re.search(r"server_name\s+www\.miconstructor\.es\s*;", text)
-    if has_root and has_www and "MICONSTRUCTOR_CANONICAL_WWW_SERVER_BEGIN" in text:
-        print("Canonical www redirect already configured with dedicated server blocks.")
-        raise SystemExit(0)
     raise SystemExit("No se encontró un bloque MiConstructor con root + www.")
 
 https_block = None
