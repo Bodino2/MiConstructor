@@ -72,6 +72,7 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
     role: "cliente",
     taxId: "12345678Z",
     privacyAccepted: true,
+    termsAccepted: true,
   });
   assert.equal(clientRegister.status, 201, clientRegister.text);
   await verifyLatestEmail(clientEmail);
@@ -90,9 +91,17 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
     specialty: "electricidad",
     assessment: { version: assessment.version, respuestas: answers },
     privacyAccepted: true,
+    termsAccepted: true,
   });
   assert.equal(professionalRegister.status, 201, professionalRegister.text);
   await verifyLatestEmail(professionalEmail);
+
+  const acceptedTerms = await database.query<{ terms_version: string | null; terms_accepted_at: Date | null }>(
+    "SELECT terms_version, terms_accepted_at FROM users WHERE email = $1",
+    [clientEmail],
+  );
+  assert.equal(acceptedTerms.rows[0]?.terms_version, "2026-08-10");
+  assert.ok(acceptedTerms.rows[0]?.terms_accepted_at);
 
   const professional = await database.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [professionalEmail]);
   const professionalId = professional.rows[0]!.id;
@@ -221,6 +230,86 @@ test("el panel admin controla cuentas y expone overview, proyectos y auditoría"
     password: targetPassword,
   });
   assert.equal(restoredLogin.status, 200, restoredLogin.text);
+});
+
+test("aceptaciones legales, páginas públicas, mandato SEPA y chat de soporte", async () => {
+  const rejected = await request(application).post("/api/v1/auth/register").send({
+    name: "Sin Términos",
+    email: "sin-terminos@example.es",
+    password: "Password-Seguro-2026",
+    role: "cliente",
+    taxId: "12345678Z",
+    privacyAccepted: true,
+  });
+  assert.equal(rejected.status, 400, rejected.text);
+  assert.match(rejected.body.error, /Términos y Condiciones/);
+
+  const publicConfig = await request(application).get("/api/v1/config");
+  assert.equal(publicConfig.status, 200);
+  assert.equal(publicConfig.body.contactEmail, "admin@miconstructor.es");
+  assert.equal(publicConfig.body.termsVersion, "2026-08-10");
+
+  for (const route of ["/aviso-legal", "/privacidad", "/cookies", "/terminos", "/sepa", "/contacto"]) {
+    const page = await request(application).get(route);
+    assert.equal(page.status, 200, route);
+    assert.match(page.text, /site-shell\.js/);
+  }
+
+  const userId = randomUUID();
+  const adminId = randomUUID();
+  const professionalId = randomUUID();
+  const userPassword = "Support-User-2026-Test";
+  const adminPassword = "Support-Admin-2026-Test";
+  const professionalPassword = "Support-Pro-2026-Test";
+  const [userHash, adminHash, professionalHash] = await Promise.all([
+    hashPassword(userPassword, config.SESSION_PEPPER),
+    hashPassword(adminPassword, config.SESSION_PEPPER),
+    hashPassword(professionalPassword, config.SESSION_PEPPER),
+  ]);
+
+  await database.query(
+    `INSERT INTO users
+      (id, email, name, password_hash, role, tax_id, email_verified, account_status,
+       verification_status, privacy_version, privacy_accepted_at)
+     VALUES
+      ($1, 'support-user@example.es', 'Support User', $2, 'cliente', $3, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now()),
+      ($4, 'support-admin@miconstructor.es', 'Support Admin', $5, 'admin', $6, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now()),
+      ($7, 'support-pro@example.es', 'Support Pro', $8, 'profesional', $9, true, 'ACTIVO', 'APROBADO', 'test-v1', now())`,
+    [userId, userHash, `CLIENT-${userId}`, adminId, adminHash, `ADMIN-${adminId}`, professionalId, professionalHash, `PRO-${professionalId}`],
+  );
+  await database.query("INSERT INTO billing_accounts (professional_id, status) VALUES ($1, 'PENDIENTE_MANDATO')", [professionalId]);
+
+  const userAgent = request.agent(application);
+  const userLogin = await userAgent.post("/api/v1/auth/login").send({ email: "support-user@example.es", password: userPassword });
+  assert.equal(userLogin.status, 200, userLogin.text);
+  const sent = await userAgent.post("/api/v1/support/messages").send({ body: "Necesito ayuda con mi proyecto." });
+  assert.equal(sent.status, 201, sent.text);
+
+  const adminAgent = request.agent(application);
+  const adminLogin = await adminAgent.post("/api/v1/auth/login").send({ email: "support-admin@miconstructor.es", password: adminPassword });
+  assert.equal(adminLogin.status, 200, adminLogin.text);
+  const threads = await adminAgent.get("/api/v1/support/admin/threads");
+  assert.equal(threads.status, 200, threads.text);
+  assert.ok(threads.body.threads.some((thread: { user_id: string }) => thread.user_id === userId));
+  const adminReply = await adminAgent.post(`/api/v1/support/admin/threads/${userId}/messages`).send({ body: "Hemos recibido tu consulta y la revisamos." });
+  assert.equal(adminReply.status, 201, adminReply.text);
+  const conversation = await userAgent.get("/api/v1/support/messages");
+  assert.equal(conversation.status, 200, conversation.text);
+  assert.equal(conversation.body.messages.length, 2);
+
+  const professionalAgent = request.agent(application);
+  const professionalLogin = await professionalAgent.post("/api/v1/auth/login").send({ email: "support-pro@example.es", password: professionalPassword });
+  assert.equal(professionalLogin.status, 200, professionalLogin.text);
+  const noSepaAcceptance = await professionalAgent.post("/api/v1/billing/setup-intent").send({});
+  assert.equal(noSepaAcceptance.status, 400, noSepaAcceptance.text);
+  const acceptedSepa = await professionalAgent.post("/api/v1/billing/setup-intent").send({ termsAccepted: true });
+  assert.equal(acceptedSepa.status, 503, acceptedSepa.text);
+  const sepaStored = await database.query<{ sepa_terms_version: string | null; sepa_terms_accepted_at: Date | null }>(
+    "SELECT sepa_terms_version, sepa_terms_accepted_at FROM billing_accounts WHERE professional_id = $1",
+    [professionalId],
+  );
+  assert.equal(sepaStored.rows[0]?.sepa_terms_version, "2026-08-10");
+  assert.ok(sepaStored.rows[0]?.sepa_terms_accepted_at);
 });
 
 test("las rutas privadas rechazan usuarios anónimos", async () => {
