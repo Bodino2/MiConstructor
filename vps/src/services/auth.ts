@@ -66,10 +66,16 @@ export function clearSessionCookie(response: Response, config: AppConfig) {
   });
 }
 
+function bearerToken(request: Request) {
+  const authorization = request.get("authorization") ?? "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
 export function authentication(database: Database, config: AppConfig) {
   return async (request: Request, _response: Response, next: NextFunction) => {
     try {
-      const token = request.cookies?.[sessionCookieName(config)];
+      const token = bearerToken(request) ?? request.cookies?.[sessionCookieName(config)];
       if (typeof token !== "string" || token.length < 32) return next();
       const tokenHash = hashOpaqueToken(token, config.SESSION_PEPPER);
       const result = await database.query<{
@@ -133,7 +139,11 @@ export function originProtection(config: AppConfig) {
     if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return next();
     const origin = request.get("origin");
     if (config.NODE_ENV === "production" && origin !== allowedOrigin) {
-      return response.status(403).json({ error: "Origen de solicitud no permitido." });
+      const authenticatedMobileRequest = Boolean(bearerToken(request));
+      const declaredMobileClient = request.get("x-miconstructor-client") === "mobile" && !origin;
+      if (!authenticatedMobileRequest && !declaredMobileClient) {
+        return response.status(403).json({ error: "Origen de solicitud no permitido." });
+      }
     }
     next();
   };
