@@ -1,360 +1,152 @@
-# NextGen Logistic 🚚📍
-
-Live tracking platform for logistics operations — **Node.js/Express gateway + NestJS tracking module + Flutter mobile apps** fully integrated.
-
----
-
-## 🧱 Project Structure
-
-```
-logistics-project/
-├── backend/                          # Node.js gateway & NestJS modules
-│   ├── index.js                      # Express gateway (port 3000)
-│   ├── auth-service.js               # Auth service (port 3001)
-│   ├── package.json                  # Dependencies: express, cors, typeorm, nestjs, axios
-│   ├── src/
-│   │   ├── modules/tracking/         # NestJS tracking module
-│   │   │   ├── tracking.entity.ts    # TrackingEntity: orderId, lat, lng, isFinal, trackingActive
-│   │   │   ├── tracking.service.ts   # Service: saveLocation, getLastLocation, getHistory, markFinal
-│   │   │   ├── tracking.controller.ts # Routes: POST /tracking/update, GET /tracking/:orderId, GET /tracking/history/:orderId
-│   │   │   ├── tracking.gateway.ts   # WebSocket gateway w/ JWT guard, emits order-{orderId}
-│   │   │   └── tracking.module.ts    # NestJS module setup
-│   │   ├── common/guards/
-│   │   │   └── jwt-ws.guard.ts       # JWT WebSocket guard (verifies token from handshake)
-│   │   ├── services/
-│   │   │   ├── eta.service.ts        # Google Directions API integration (duration, distance, polyline)
-│   │   │   └── AuthService.js
-│   │   ├── entities/
-│   │   │   ├── User.ts
-│   │   │   ├── Truck.ts
-│   │   │   └── LocationHistory.ts
-│   │   ├── routes/
-│   │   │   └── auth.js
-│   │   └── database.ts
-│   └── update_admin.sql
-│
-├── driver_app/                       # Flutter driver tracking app
-│   ├── pubspec.yaml                  # Deps: geolocator, http, google_maps_flutter, socket_io_client, firebase_core, cloud_firestore, flutter_background_service
-│   ├── lib/
-│   │   ├── main.dart                 # App entry point + LoginPage + TrackingPage
-│   │   ├── driver_tracking_service.dart # Service: startTracking, attachBackgroundListener, _sendLocation (HTTP + Firestore)
-│   │   └── client_tracking_map.dart  # Google Map widget + route polyline + ETA/distance overlay
-│   ├── android/app/src/main/AndroidManifest.xml # Permissions: FINE_LOCATION, COARSE_LOCATION, BACKGROUND_LOCATION, INTERNET
-│   └── README.md
-│
-├── fleet_tracker/                    # Flutter fleet admin app
-│   ├── pubspec.yaml
-│   ├── lib/main.dart
-│   └── android/
-│
-├── fleet_dashboard/                  # Node.js web dashboard
-│   ├── package.json
-│   ├── server.js
-│   └── public/
-│       ├── index.html
-│       ├── app.js
-│       └── styles.css
-│
-└── dashboard.html
-```
-
----
-
-## ⚡ Features
-
-- **JWT Authentication**: Secure driver & client login with token-based access
-- **Real-time GPS Tracking**: Driver location updates every 10s via geolocator
-- **WebSocket Broadcasting**: Order-specific channels (`order-{orderId}`) for live location
-- **Firebase Fallback**: All tracking data synced to Firestore (`tracking/{orderId}`)
-- **ETA & Route Calculation**: Google Directions API integration with polyline visualization
-- **Historical Route Storage**: PostgreSQL persistence for analytics & auditing
-- **Background Tracking**: Flutter background service for continuous location posting (Android & iOS)
-- **Order Integration**: Automatic tracking activation/deactivation with order status
-- **Scalable Architecture**: Modular NestJS design for large fleet operations
-- **Multi-App Support**: Driver app (tracking), fleet dashboard (admin), fleet tracker (monitoring)
-
----
-
-## 🛠️ Tech Stack
-
-**Backend:**
-- Node.js + Express (gateway)
-- NestJS (tracking module)
-- TypeORM (PostgreSQL/database abstraction)
-- Socket.io (WebSocket)
-- Axios (HTTP client)
-- JWT (authentication)
-
-**Frontend:**
-- Flutter 3.10+ (driver_app, fleet_tracker)
-- Google Maps Flutter
-- Geolocator
-- Socket.io Client
-- Firebase (Core + Firestore)
-- Flutter Background Service
-
-**Services:**
-- Google Cloud Maps API (directions, polylines)
-- Firebase (Firestore + Authentication)
-- PostgreSQL (planned)
-
----
-
-## 🔧 Prerequisites
-
-- **Node.js** v20+ (backend & gateway)
-- **NestJS CLI** (optional: `npm install -g @nestjs/cli`)
-- **PostgreSQL** 15+ (database)
-- **Flutter** 3.13+ (mobile apps)
-- **Firebase Project** (Authentication + Firestore)
-- **Google Maps API Key** (Directions & Maps)
-- **Git** & **GitHub Account** (version control)
-
----
-
-## 📝 Setup Instructions
-
-### Backend Setup (Express Gateway + NestJS)
-
-1. **Navigate to backend directory:**
-   ```bash
-   cd backend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   npm install axios
-   ```
-
-3. **Configure environment variables:**
-   ```bash
-   # Create .env file in backend/
-   JWT_SECRET=your_jwt_secret_key_here
-   GOOGLE_MAPS_KEY=your_google_maps_api_key
-   DB_HOST=localhost
-   DB_USER=postgres
-   DB_PASSWORD=password
-   DB_NAME=nextgen_logistics
-   DB_PORT=5432
-   NODE_ENV=development
-   ```
-
-4. **Initialize database (PostgreSQL):**
-   ```bash
-   # Ensure PostgreSQL is running
-   psql -U postgres -c "CREATE DATABASE nextgen_logistics;"
-   
-   # Run migrations (if using TypeORM CLI)
-   npm run typeorm migration:run
-   ```
-
-5. **Start auth service (port 3001):**
-   ```bash
-   node auth-service.js
-   ```
-
-6. **In another terminal, start gateway (port 3000):**
-   ```bash
-   node index.js
-   ```
-
-   **Expected output:**
-   ```
-   Gateway deschis pentru telefon la portul 3000
-   ```
-
----
-
-## 📱 Driver App Setup (Flutter)
-
-1. **Navigate to driver app:**
-   ```bash
-   cd driver_app
-   ```
-
-2. **Install Flutter dependencies:**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Configure Firebase:**
-   - Go to [Firebase Console](https://console.firebase.google.com/)
-   - Create a new project or use existing
-   - Download `google-services.json` for Android
-   - Place file in `driver_app/android/app/`
-   - Update `android/build.gradle` with Google Services plugin:
-     ```gradle
-     plugins {
-       id 'com.google.gms.google-services' version '4.4.0'
-     }
-     ```
-
-4. **Update backend URL:**
-   - Edit `lib/main.dart` and `lib/driver_tracking_service.dart`
-   - Replace `192.168.1.141` with your local machine IP (for LAN testing) or production server URL
-
-5. **Build & run:**
-   ```bash
-   # Debug mode (emulator or connected device)
-   flutter run
-
-   # Release APK
-   flutter build apk --release
-   
-   # Release app bundle (Google Play)
-   flutter build appbundle --release
-   ```
-
----
-
-## 🌐 Fleet Dashboard Setup (Node.js Web)
-
-1. **Navigate to fleet dashboard:**
-   ```bash
-   cd fleet_dashboard
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start server (port 3002):**
-   ```bash
-   node server.js
-   ```
-
-4. **Open in browser:**
-   ```
-   http://localhost:3002
-   ```
-
----
-
-
-
-## 📡 API Endpoints
-
-### Tracking REST
-
-- **POST** `/tracking/update` — Save driver location
-  ```json
-  { "orderId": "order-123", "lat": 40.7128, "lng": -74.0060 }
-  ```
-
-- **GET** `/tracking/:orderId` — Get last location
-- **GET** `/tracking/history/:orderId` — Get all historical locations (ASC by timestamp)
-
-### WebSocket Gateway
-
-- **Channel:** `order-{orderId}`
-- **Message:** Location broadcast on SubscribeMessage('location')
-  ```json
-  { "orderId": "order-123", "lat": 40.7128, "lng": -74.0060, "timestamp": "2026-01-10T..." }
-  ```
-
-### Authentication
-
-- **POST** `/api/auth/login` — Login (proxied to auth-service)
-  ```json
-  { "email": "driver@example.com", "password": "password123" }
-  ```
-
----
-
-## 🔐 Security
-
-- **JWT Guards**: WebSocket connections verified via `JwtWsGuard`
-- **CORS Enabled**: WebSocket gateway allows cross-origin requests
-- **Background Location**: Request at runtime on Android 10+
-- **Token Storage**: Client-side in driver app (from login response)
-
----
-
-## 📍 Key Modules
-
-### TrackingService (NestJS)
-- `saveLocation(orderId, lat, lng)` — Create tracking record
-- `getLastLocation(orderId)` — Fetch latest position
-- `getHistory(orderId)` — Full position history
-- `markFinal(orderId)` — Flag tracking as complete when order status = 'DONE'
-
-### DriverTrackingService (Flutter)
-- `startTracking(orderId)` — 10s periodic geolocator updates
-- `attachBackgroundListener(service, orderId)` — Listen to background service events
-- `_sendLocation(orderId, pos)` — POST to backend + Firestore
-
-### ClientTrackingMap (Flutter)
-- Real-time marker updates from WebSocket
-- Route polyline rendering (Google Directions)
-- ETA & distance overlay
-- Camera animation to truck position
-
-### ETA Service (TypeScript)
-- `getETA(origin, destination)` — Google Directions API call
-- Returns: `{ duration, distance, polyline }`
-
----
-
-## 🔄 Workflow
-
-1. **Driver logs in** → receives JWT token
-2. **Driver starts tracking** → `DriverTrackingService.startTracking(orderId)` begins
-3. **Every 10s:** Geolocator fetches position → POST to `/tracking/update` + Firestore
-4. **WebSocket broadcasts:** Tracking gateway emits on `order-{orderId}`
-5. **Admin/client listens:** `ClientTrackingMap` subscribes to `order-{orderId}`, renders marker + route
-6. **Order completes:** Backend calls `trackingService.markFinal(orderId)` → sets `isFinal=true`, `trackingActive=false`
-
----
-
-## 📦 Dependencies Summary
-
-**Backend (backend/package.json):**
-```json
-{
-  "express": "^5.2.1",
-  "cors": "^2.8.5",
-  "jsonwebtoken": "^9.0.3",
-  "typeorm": "^0.3.28",
-  "pg": "^8.16.3",
-  "axios": "^1.6.8",
-  "node-fetch": "^3.3.2"
+# MiConstructor
+
+Marketplace SaaS para reformas construido con Next.js/Vinext, Cloudflare D1 y
+Drizzle.
+
+## Modelo de negocio
+
+- El registro profesional y la consulta de proyectos son gratuitos.
+- El profesional debe aprobar el test de conocimientos y superar la revisión
+  documental antes de poder enviar propuestas o recibir contactos.
+- MiConstructor cobra una tarifa de lead cuando el cliente añade al profesional
+  a la shortlist. La tarifa se calcula sobre el presupuesto estimado del
+  proyecto en ese momento: 5% hasta 1.500 €, 4% entre 1.500,01 € y 10.000 €, y
+  3% por encima de 10.000 €.
+- El contacto permanece bloqueado hasta confirmar el débito de créditos o el
+  pago externo.
+- La tarifa se cobra una sola vez por la selección y no se recalcula sobre el
+  importe final facturado de la obra.
+- Las selecciones se agrupan en una factura semanal y se cobran mediante
+  domiciliación bancaria SEPA. Un adeudo fallido suspende automáticamente la
+  cuenta hasta pagar íntegramente el saldo vencido.
+- Los porcentajes de cálculo son configuración interna y no se muestran en las
+  páginas públicas.
+
+## Producto
+
+- Estimador orientativo por tipo de obra, superficie y calidades, con desglose
+  de mano de obra, materiales y residuos/permisos.
+- Devize estructurate por partidas y contrato PDF generado al aceptar.
+- Diario de Obra con evidencias por hito y Pasaporte Digital del inmueble.
+- Reseñas bilaterales double-blind, limitadas a proyectos finalizados y pagados.
+- Portfolio moderado con imágenes de antes/después y póliza RC verificable.
+- Chat con filtro anti-bypass antes del desbloqueo del contacto.
+- Páginas locales de servicio y guías de precios con sitemap, FAQ y datos
+  estructurados basados únicamente en profesionales y reseñas reales.
+
+Rutas principales:
+
+- `GET/POST /api/v1/evaluacion-profesional`: preguntas públicas y corrección
+  server-side del test.
+- `POST /api/v1/usuarios/registro`: alta legal con RGPD, NIF/CIF y test
+  obligatorio para profesionales.
+- `GET /api/v1/tarifas-shortlist`: tabla versionada de tarifas.
+- `POST /api/v1/proyectos/:id/shortlist`: selección, débito de créditos,
+  transacción y desbloqueo del contacto.
+
+La integración de Stripe queda aislada por las referencias de proveedor y el
+estado `PENDIENTE`; el endpoint nunca simula un pago exitoso ni desbloquea datos
+sin confirmación.
+
+## Prerequisites
+
+- Node.js `>=22.13.0`
+- Linux with `flock`, `curl`, and GNU `timeout`
+
+## Sites Lifecycle
+
+The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+
+This starter does not use `wrangler.jsonc`.
+
+`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout and then validates the Sites artifact. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
+
+Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
+
+## Included Shape
+
+- edit site code under `app/`
+- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
+- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
+- `vite.config.ts` simulates declared bindings for local development
+- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
+- `db/schema.ts` starts intentionally empty
+- `examples/d1/` contains an optional D1 example surface
+- `drizzle.config.ts` supports local migration generation when needed
+
+## Workspace Auth Headers
+
+OpenAI workspace sites can read the current user's email from
+`oai-authenticated-user-email`.
+
+SIWC-authenticated workspace sites may also receive
+`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
+`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
+`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+
+Treat the full name as optional and fall back to email when it is absent:
+
+```tsx
+import { headers } from "next/headers";
+
+export default async function Home() {
+  const requestHeaders = await headers();
+  const email = requestHeaders.get("oai-authenticated-user-email");
+  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
+  const fullName =
+    encodedFullName &&
+    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
+      "percent-encoded-utf-8"
+      ? decodeURIComponent(encodedFullName)
+      : null;
+
+  const displayName = fullName ?? email;
+  // ...
 }
 ```
 
-**Driver App (driver_app/pubspec.yaml):**
-```yaml
-dependencies:
-  flutter: sdk
-  http: ^1.1.0
-  geolocator: ^10.1.0
-  google_maps_flutter: ^2.6.0
-  socket_io_client: ^2.0.3
-  firebase_core: ^2.25.0
-  cloud_firestore: ^4.13.0
-  flutter_background_service: ^5.0.5
-```
+## Optional Dispatch-Owned ChatGPT Sign-In
 
----
+Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
+optional or required ChatGPT sign-in:
 
-## 🐛 Troubleshooting
+- Use `getChatGPTUser()` for optional signed-in UI.
+- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
+  anonymous visitors through Sign in with ChatGPT.
+- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
+  browser links or actions.
+- Pass a same-origin relative `returnTo` path for the destination after sign-in
+  or sign-out. The helper validates and safely encodes it.
+- Mark protected pages with `export const dynamic = "force-dynamic"` because
+  they depend on per-request identity headers.
 
-- **Backend fails to start:** Ensure `node_fetch@3.3.2` is installed; check `JWT_SECRET` & `GOOGLE_MAPS_KEY` env vars
-- **Driver app won't track:** Verify location permissions granted at runtime; ensure backend URL is reachable from device
-- **WebSocket disconnects:** Check `JwtWsGuard` — confirm token passed in handshake; restart auth-service if 3001 hangs
-- **Polyline not showing:** Validate encoded polyline format from Google Directions API
+Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
+OAuth cookies, and identity header injection. Do not implement app routes for
+those reserved paths. Routes that do not import and call the helper remain
+anonymous-compatible.
 
----
+SIWC establishes identity only; it does not prove workspace membership. Use the
+Sites hosting platform's access policy controls for workspace-wide restrictions,
+or enforce explicit server-side membership or allowlist checks.
 
-## 📝 License
+Use SIWC for account pages, user-specific dashboards, saved records, and write
+actions tied to the current ChatGPT user. Leave public content anonymous.
 
-NextGen Logistics — Internal Use Only
+## Diagnostic Commands
 
----
+- `npm run install:ci`: perform the one bounded lockfile install
+- `npm run dev`: start the Vite/Vinext development server
+- `npm run build`: build and validate the deployable Sites artifact
+- `npm run start`: start the built Vinext application
+- `npm test`: build, validate, and verify the rendered development-preview metadata
+- `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
+- `npm run db:generate`: generate Drizzle migrations after schema changes
 
-## 👥 Team
+Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
 
-Built with NestJS, Flutter, and Firebase for real-time fleet operations.
+The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
 
-Last updated: **2026-01-10**
+## Learn More
+
+- [vinext Documentation](https://github.com/cloudflare/vinext)
+- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)

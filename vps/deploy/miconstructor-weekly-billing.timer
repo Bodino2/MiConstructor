@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MiConstructor billing every Monday
+
+[Timer]
+OnCalendar=Mon *-*-* 03:15:00 Europe/Madrid
+Persistent=true
+RandomizedDelaySec=300
+Unit=miconstructor-weekly-billing.service
+
+[Install]
+WantedBy=timers.target

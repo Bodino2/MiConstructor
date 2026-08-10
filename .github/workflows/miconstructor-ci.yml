@@ -1,0 +1,73 @@
+name: MiConstructor CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "agent/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: miconstructor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    name: Landing and existing product checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  vps-production:
+    name: Production API and PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: miconstructor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d miconstructor_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/miconstructor_test
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/miconstructor_test
+      APP_URL: http://localhost:3200
+      SESSION_PEPPER: ssssssssssssssssssssssssssssssss
+      TOKEN_PEPPER: tttttttttttttttttttttttttttttttt
+      BILLING_JOB_SECRET: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      ADMIN_EMAIL: admin@miconstructor.es
+      REQUIRE_EXTERNAL_SERVICES: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vps/package-lock.json
+      - run: npm ci
+        working-directory: vps
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: vps
+      - run: npm run check
+        working-directory: vps
+      - name: Assert no internal pricing leaks from the public app
+        run: |
+          ! grep -R --line-number --extended-regexp '0\.0[345]|percentage|rate' vps/public

@@ -1,0 +1,140 @@
+import type { NextFunction, Request, Response } from "express";
+import type { AppConfig } from "../config.js";
+import type { Database } from "../db.js";
+import { createOpaqueToken, hashOpaqueToken } from "./crypto.js";
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: "cliente" | "profesional" | "admin";
+  emailVerified: boolean;
+  accountStatus: string;
+  verificationStatus: string;
+};
+
+declare global {
+  // Express uses namespace merging for request augmentation.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+      sessionTokenHash?: string;
+    }
+  }
+}
+
+export function sessionCookieName(config: AppConfig) {
+  return config.NODE_ENV === "production"
+    ? "__Host-miconstructor_session"
+    : "miconstructor_session";
+}
+
+export async function createSession(
+  database: Database,
+  config: AppConfig,
+  userId: string,
+  request: Request,
+) {
+  const token = createOpaqueToken();
+  const tokenHash = hashOpaqueToken(token, config.SESSION_PEPPER);
+  await database.query(
+    `INSERT INTO auth_sessions
+      (token_hash, user_id, ip_address, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4, now() + interval '30 days')`,
+    [tokenHash, userId, request.ip ?? null, request.get("user-agent")?.slice(0, 500) ?? null],
+  );
+  return token;
+}
+
+export function setSessionCookie(response: Response, config: AppConfig, token: string) {
+  response.cookie(sessionCookieName(config), token, {
+    httpOnly: true,
+    secure: config.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+}
+
+export function clearSessionCookie(response: Response, config: AppConfig) {
+  response.clearCookie(sessionCookieName(config), {
+    httpOnly: true,
+    secure: config.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+}
+
+export function authentication(database: Database, config: AppConfig) {
+  return async (request: Request, _response: Response, next: NextFunction) => {
+    try {
+      const token = request.cookies?.[sessionCookieName(config)];
+      if (typeof token !== "string" || token.length < 32) return next();
+      const tokenHash = hashOpaqueToken(token, config.SESSION_PEPPER);
+      const result = await database.query<{
+        id: string;
+        email: string;
+        name: string;
+        role: AuthUser["role"];
+        email_verified: boolean;
+        account_status: string;
+        verification_status: string;
+      }>(
+        `SELECT u.id, u.email, u.name, u.role, u.email_verified,
+                u.account_status, u.verification_status
+           FROM auth_sessions s
+           JOIN users u ON u.id = s.user_id
+          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+        [tokenHash],
+      );
+      const row = result.rows[0];
+      if (row) {
+        request.user = {
+          id: row.id,
+          email: row.email,
+          name: row.name,
+          role: row.role,
+          emailVerified: row.email_verified,
+          accountStatus: row.account_status,
+          verificationStatus: row.verification_status,
+        };
+        request.sessionTokenHash = tokenHash;
+        void database.query("UPDATE auth_sessions SET last_seen_at = now() WHERE token_hash = $1", [tokenHash]);
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+export function requireAuth(request: Request, response: Response, next: NextFunction) {
+  if (!request.user) return response.status(401).json({ error: "Debes iniciar sesión." });
+  if (request.user.accountStatus === "SUSPENDIDO") {
+    return response.status(423).json({ error: "La cuenta está suspendida." });
+  }
+  next();
+}
+
+export function requireRole(...roles: AuthUser["role"][]) {
+  return (request: Request, response: Response, next: NextFunction) => {
+    if (!request.user) return response.status(401).json({ error: "Debes iniciar sesión." });
+    if (!roles.includes(request.user.role)) {
+      return response.status(403).json({ error: "No tienes permisos para esta operación." });
+    }
+    next();
+  };
+}
+
+export function originProtection(config: AppConfig) {
+  const allowedOrigin = new URL(config.APP_URL).origin;
+  return (request: Request, response: Response, next: NextFunction) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return next();
+    const origin = request.get("origin");
+    if (config.NODE_ENV === "production" && origin !== allowedOrigin) {
+      return response.status(403).json({ error: "Origen de solicitud no permitido." });
+    }
+    next();
+  };
+}

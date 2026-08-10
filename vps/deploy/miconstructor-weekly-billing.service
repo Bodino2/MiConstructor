@@ -1,0 +1,13 @@
+[Unit]
+Description=MiConstructor weekly SEPA billing trigger
+After=miconstructor-api.service
+Requires=miconstructor-api.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/miconstructor/api.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 120 --request POST --header "x-miconstructor-job-secret: ${BILLING_JOB_SECRET}" http://127.0.0.1:3200/api/v1/jobs/weekly-billing
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
