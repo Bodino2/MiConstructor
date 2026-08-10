@@ -71,6 +71,32 @@ jobs:
       - name: Verify compiled production migrator
         run: npm run migrate:prod
         working-directory: vps
+      - name: Verify compiled production server boots
+        working-directory: vps
+        run: |
+          set -Eeuo pipefail
+          rm -rf /tmp/miconstructor-ci-uploads
+          mkdir -p /tmp/miconstructor-ci-uploads
+          UPLOAD_DIR=/tmp/miconstructor-ci-uploads node dist/src/server.js >/tmp/miconstructor-server.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3200/health/ready >/tmp/miconstructor-health.json; then
+              cat /tmp/miconstructor-health.json
+              exit 0
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat /tmp/miconstructor-server.log
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat /tmp/miconstructor-server.log
+          exit 1
       - name: Verify Node-compatible systemd hardening
         run: |
           ! grep -Eq '^MemoryDenyWriteExecute=(yes|true)$' vps/deploy/miconstructor-api.service
