@@ -68,6 +68,9 @@ jobs:
         working-directory: vps
       - run: npm run check
         working-directory: vps
+      - name: Verify compiled production migrator
+        run: npm run migrate:prod
+        working-directory: vps
       - name: Assert no internal pricing leaks from the public app
         run: |
           ! grep -R --line-number --extended-regexp '0\.0[345]|percentage|rate' vps/public
