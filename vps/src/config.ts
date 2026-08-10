@@ -27,7 +27,7 @@ const envSchema = z.object({
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   BILLING_JOB_SECRET: z.string().min(24),
   ADMIN_EMAIL: z.string().email(),
-  PUBLIC_CONTACT_EMAIL: z.string().email().optional(),
+  PUBLIC_CONTACT_EMAIL: z.string().email().default("oficina@miconstructor.es"),
   PUBLIC_CONTACT_PHONE: z.string().trim().min(6).max(40).optional(),
   LEGAL_ENTITY_TYPE: z.enum(["persona_fisica", "sociedad"]).default("persona_fisica"),
   LEGAL_ENTITY_NAME: z.string().trim().min(2).max(200).optional(),
@@ -77,7 +77,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
 }
 
 export function publicRuntimeConfig(config: AppConfig) {
-  const contactEmail = config.PUBLIC_CONTACT_EMAIL ?? config.ADMIN_EMAIL;
   const legalIdentityComplete = Boolean(
     config.LEGAL_ENTITY_NAME
     && config.LEGAL_TAX_ID
@@ -88,7 +87,7 @@ export function publicRuntimeConfig(config: AppConfig) {
     appUrl: config.APP_URL,
     stripePublishableKey: config.STRIPE_PUBLISHABLE_KEY ?? null,
     billingEnabled: Boolean(config.STRIPE_SECRET_KEY && config.STRIPE_WEBHOOK_SECRET),
-    contactEmail,
+    contactEmail: config.PUBLIC_CONTACT_EMAIL,
     contactPhone: config.PUBLIC_CONTACT_PHONE ?? null,
     legalEntityType: config.LEGAL_ENTITY_TYPE,
     legalEntityName: config.LEGAL_ENTITY_NAME ?? null,
