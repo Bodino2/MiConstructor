@@ -25,7 +25,7 @@ test("producción rechaza HTTP y credenciales externas ausentes", () => {
     NODE_ENV: "production",
     HOST: "127.0.0.1",
     PORT: "3200",
-    APP_URL: "http://app.miconstructor.es",
+    APP_URL: "http://miconstructor.es",
     DATABASE_URL: "postgresql://localhost/test",
     SESSION_PEPPER: "s".repeat(32),
     TOKEN_PEPPER: "t".repeat(32),
