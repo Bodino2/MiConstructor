@@ -1,7 +1,12 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 
 const PORT = Number(process.env.PORT || 8080);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.resolve(__dirname, '../public');
 
 const services = [
   { slug: 'reformas-integrales', name: 'Reformas integrales' },
@@ -80,6 +85,17 @@ function estimate(query) {
   };
 }
 
+function serveIndex(res) {
+  fs.readFile(path.join(publicDir, 'index.html'), (err, data) => {
+    if (err) return json(res, 500, { error: 'frontend_unavailable' });
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'content-length': data.length
+    });
+    res.end(data);
+  });
+}
+
 export function createServer() {
   return http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -91,6 +107,10 @@ export function createServer() {
         'access-control-allow-headers': 'content-type'
       });
       return res.end();
+    }
+
+    if (req.method === 'GET' && url.pathname === '/') {
+      return serveIndex(res);
     }
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
@@ -119,6 +139,6 @@ export function createServer() {
 
 if (process.env.NODE_ENV !== 'test') {
   createServer().listen(PORT, '0.0.0.0', () => {
-    console.log(`MiConstructor API listening on ${PORT}`);
+    console.log(`MiConstructor live listening on ${PORT}`);
   });
 }
