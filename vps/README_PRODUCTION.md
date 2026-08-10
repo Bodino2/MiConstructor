@@ -11,7 +11,7 @@ Este directorio es la aplicación real y no utiliza los datos de demostración d
 - base PostgreSQL: `miconstructor`, con propietario `miconstructor`;
 - servicio: `miconstructor-api.service`;
 - puerto local: `127.0.0.1:3200`;
-- hostname recomendado durante la puesta en marcha: `app.miconstructor.es`.
+- hostname de producción: `miconstructor.es`.
 
 No se reutilizan la base, el usuario, los directorios, el puerto ni los servicios de ONOFFCARGO.
 
