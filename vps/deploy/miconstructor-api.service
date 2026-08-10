@@ -24,7 +24,8 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# Node/V8 necesita transiciones de memoria a ejecutable para el JIT; activarlo provoca SIGTRAP al iniciar.
+MemoryDenyWriteExecute=false
 SystemCallArchitectures=native
 UMask=0077
 
