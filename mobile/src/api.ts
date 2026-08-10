@@ -171,6 +171,53 @@ export async function adminOverview() {
   return apiRequest<AdminOverview>("/api/v1/admin/overview");
 }
 
+export async function adminUsers() {
+  return apiRequest<{ users: Array<{
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    company_name?: string | null;
+    account_status: string;
+    verification_status: string;
+    created_at: string;
+    last_login_at?: string | null;
+    billing_status?: string | null;
+    overdue_balance_cents?: number | string;
+  }> }>("/api/v1/admin/users?limit=200");
+}
+
+export async function adminProjects() {
+  return apiRequest<{ projects: Array<{
+    id: string;
+    title: string;
+    category: string;
+    location: string;
+    status: string;
+    budget_cents: number | string;
+    owner_name: string;
+    owner_email: string;
+    proposal_count: number | string;
+    shortlist_count: number | string;
+    has_contract: boolean;
+    created_at: string;
+  }> }>("/api/v1/admin/projects?limit=200");
+}
+
+export async function adminAudit() {
+  return apiRequest<{ events: Array<{
+    id: number | string;
+    action: string;
+    entity_type: string;
+    entity_id?: string | null;
+    ip_address?: string | null;
+    metadata?: Record<string, unknown>;
+    created_at: string;
+    actor_name?: string | null;
+    actor_email?: string | null;
+  }> }>("/api/v1/admin/audit?limit=200");
+}
+
 export async function adminThreads() {
   return apiRequest<{ threads: SupportThread[] }>("/api/v1/support/admin/threads");
 }
