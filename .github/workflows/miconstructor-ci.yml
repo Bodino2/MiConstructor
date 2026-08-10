@@ -80,6 +80,7 @@ jobs:
       TOKEN_PEPPER: tttttttttttttttttttttttttttttttt
       BILLING_JOB_SECRET: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       ADMIN_EMAIL: admin@miconstructor.es
+      PUBLIC_CONTACT_EMAIL: admin@miconstructor.es
       REQUIRE_EXTERNAL_SERVICES: "false"
     steps:
       - uses: actions/checkout@v4
