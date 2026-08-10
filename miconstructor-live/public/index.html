@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MiConstructor</title>
+  <style>
+    :root{--bg:#F4F5F7;--primary:#2C3E50;--cta:#D35400;--muted:#95A5A6;--ok:#27AE60}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--primary)}
+    header{padding:22px 7%;display:flex;justify-content:space-between;align-items:center;background:white;border-bottom:1px solid #e5e7eb}
+    .brand{font-size:24px;font-weight:800}.pill{padding:9px 14px;border-radius:999px;background:#e8ecef;font-weight:700}
+    main{max-width:1100px;margin:0 auto;padding:56px 24px}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:36px;align-items:center}
+    h1{font-size:52px;line-height:1.02;margin:0 0 18px}p{font-size:18px;line-height:1.6}.card{background:white;padding:26px;border-radius:18px;box-shadow:0 10px 30px #00000010}
+    label{display:block;font-weight:700;margin:14px 0 6px}input,select,button{width:100%;padding:13px;border-radius:10px;border:1px solid #cfd6dc;font-size:16px}
+    button{margin-top:18px;background:var(--cta);color:white;border:0;font-weight:800;cursor:pointer}.result{margin-top:18px;padding:14px;border-radius:10px;background:#f6f8fa;min-height:56px}
+    .status{font-size:14px;color:var(--muted)}.ok{color:var(--ok);font-weight:800}@media(max-width:800px){.hero{grid-template-columns:1fr}h1{font-size:38px}}
+  </style>
+</head>
+<body>
+<header><div class="brand">MiConstructor</div><div class="pill">Profesionales verificados</div></header>
+<main>
+  <section class="hero">
+    <div>
+      <div class="status" id="apiStatus">Comprobando plataforma…</div>
+      <h1>Tu obra, con profesionales adecuados desde el primer paso.</h1>
+      <p>Describe el trabajo, recibe una estimación orientativa y conecta con profesionales verificados para tu especialidad y localidad.</p>
+    </div>
+    <div class="card">
+      <h2>Estimador de precio</h2>
+      <label for="type">Trabajo</label>
+      <select id="type">
+        <option value="reformas-integrales">Reforma integral</option>
+        <option value="reformas-de-banos">Reforma de baño</option>
+        <option value="reformas-de-cocinas">Reforma de cocina</option>
+        <option value="pintores">Pintura</option>
+        <option value="electricistas">Electricidad</option>
+        <option value="fontaneros">Fontanería</option>
+      </select>
+      <label for="sqm">Superficie aproximada (m²)</label><input id="sqm" type="number" min="1" value="50" />
+      <label for="quality">Calidad</label><select id="quality"><option value="basico">Básico</option><option value="estandar" selected>Estándar</option><option value="premium">Premium</option></select>
+      <button id="estimate">Calcular estimación</button>
+      <div class="result" id="result">Introduce los datos para calcular.</div>
+    </div>
+  </section>
+</main>
+<script>
+const API = window.MICONSTRUCTOR_API || 'http://localhost:8080';
+const status = document.getElementById('apiStatus');
+fetch(`${API}/api/health`).then(r=>r.json()).then(()=>{status.innerHTML='<span class="ok">● Plataforma operativa</span>'}).catch(()=>{status.textContent='API no disponible en este entorno';});
+document.getElementById('estimate').addEventListener('click', async () => {
+  const type=document.getElementById('type').value, sqm=document.getElementById('sqm').value, quality=document.getElementById('quality').value;
+  const box=document.getElementById('result'); box.textContent='Calculando…';
+  try{const r=await fetch(`${API}/api/v1/estimate?type=${encodeURIComponent(type)}&sqm=${encodeURIComponent(sqm)}&quality=${encodeURIComponent(quality)}`);const d=await r.json();box.innerHTML=`Estimación orientativa: <strong>${d.min.toLocaleString('es-ES')} € – ${d.max.toLocaleString('es-ES')} €</strong><br><small>Mano de obra, materiales y gestión de residuos incluidos en el cálculo orientativo.</small>`;}catch{box.textContent='No se pudo conectar con el estimador.'}
+});
+</script>
+</body>
+</html>
