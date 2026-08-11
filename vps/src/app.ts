@@ -136,6 +136,9 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use((error: unknown, request: Request, response: Response, _next: NextFunction) => {
     const message = error instanceof Error ? error.message : "Error desconocido";
     console.error(JSON.stringify({ level: "error", requestId: response.getHeader("x-request-id"), path: request.path, message }));
+    if (message.includes("professional_schedule_capacity_exceeded")) {
+      return response.status(409).json({ error: "El profesional ya ha alcanzado su capacidad para esa franja horaria. Elige otra fecha, hora u oferta." });
+    }
     if (message.includes("Tipo de archivo") || message.includes("File too large")) {
       return response.status(400).json({ error: message.includes("large") ? "El archivo supera el límite permitido." : message });
     }
