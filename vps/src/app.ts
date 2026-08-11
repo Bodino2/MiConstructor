@@ -116,6 +116,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/registro-cliente",
     "/para-profesionales",
     "/registro-profesional",
+    "/servicios-hogar",
     "/panel",
     "/verificar-email",
     "/restablecer",
