@@ -73,7 +73,7 @@ test("aprobar un oficio no valida otro oficio", () => {
   assert.equal(result.passed, false);
 });
 
-test("la tarifa de shortlist aplica 5%, 4% o 3% al presupuesto estimado", () => {
+test("la tarifa de selección aplica 5%, 4% o 3% al presupuesto estimado", () => {
   assert.deepEqual(
     { fee: calculateShortlistFee(100_000).feeCents, rate: calculateShortlistFee(100_000).rate },
     { fee: 5_000, rate: 0.05 },
@@ -93,10 +93,12 @@ test("la tarifa de shortlist aplica 5%, 4% o 3% al presupuesto estimado", () => 
   assert.equal(calculateShortlistFee(0).valid, false);
 });
 
-test("la política pública no expone porcentajes ni coeficientes internos", () => {
+test("la política pública cobra solo al profesional seleccionado y no expone porcentajes", () => {
   const policy = getPublicShortlistBillingPolicy();
-  assert.equal(policy.frequency, "WEEKLY");
-  assert.equal(policy.collectionMethod, "SEPA_DIRECT_DEBIT");
+  assert.equal(policy.chargeTrigger, "CLIENT_SELECTS_PROFESSIONAL");
+  assert.equal(policy.chargedParty, "SELECTED_PROFESSIONAL_ONLY");
+  assert.equal(policy.frequency, "IMMEDIATE_PER_SELECTION");
+  assert.equal(policy.collectionMethod, "SEPA_DIRECT_DEBIT_OFF_SESSION");
   assert.equal("tiers" in policy, false);
   assert.equal("percentage" in policy, false);
   assert.equal("rate" in policy, false);
@@ -123,7 +125,7 @@ test("el estimador devuelve rango y partidas que cuadran con el total", () => {
   assert.equal(estimateProjectPrice({ projectType: "x", squareMeters: 70, qualityLevel: "estandar" }).valid, false);
 });
 
-test("la semana de facturación cierra el lunes y el impago suspende", () => {
+test("la lógica histórica semanal sigue disponible solo para compatibilidad y el impago suspende", () => {
   assert.deepEqual(previousWeeklyPeriod(new Date("2026-08-12T10:00:00Z")), {
     start: "2026-08-03T00:00:00.000Z",
     end: "2026-08-10T00:00:00.000Z",

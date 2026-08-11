@@ -156,6 +156,13 @@ export async function billing() {
   return apiRequest<BillingSummary>("/api/v1/billing/me");
 }
 
+export async function retrySelectionCharge(id: string) {
+  return apiRequest<{ success: boolean; status: string }>(`/api/v1/billing/charges/${encodeURIComponent(id)}/retry`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export async function supportMessages() {
   return apiRequest<{ messages: SupportMessage[] }>("/api/v1/support/messages");
 }

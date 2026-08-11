@@ -4,19 +4,26 @@ import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import type Stripe from "stripe";
 import type { AppConfig } from "./config.js";
 import { publicRuntimeConfig } from "./config.js";
 import type { Database } from "./db.js";
 import { assertDatabaseReady } from "./db.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
-import { billingRouter, stripeWebhookHandler } from "./routes/billing.js";
+import { billingRouter, stripeClient, stripeWebhookHandler } from "./routes/billing.js";
 import { evidenceUploadsRouter } from "./routes/evidence-uploads.js";
 import { executionRouter } from "./routes/execution.js";
+import { homeServicesLifecycleRouter } from "./routes/home-services-lifecycle.js";
+import { homeServicesRouter } from "./routes/home-services.js";
+import { intelligenceRouter } from "./routes/intelligence.js";
 import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./routes/legal-support.js";
 import { marketplaceRouter } from "./routes/marketplace.js";
 import { mobileAuthRouter } from "./routes/mobile-auth.js";
+import { operatingSystemRouter } from "./routes/operating-system.js";
 import { professionalVerificationRouter } from "./routes/professional-verification.js";
+import { publicDirectoryRouter } from "./routes/public-directory.js";
+import { unifiedAssessmentsRouter } from "./routes/unified-assessments.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
@@ -31,10 +38,13 @@ const domainConflictMessages: Array<[string, string]> = [
   ["contract_active_proposal_required", "La propuesta ya no está disponible para contratación."],
   ["contract_shortlist_required", "Debes seleccionar al profesional antes de aceptar su propuesta."],
   ["contract_professional_not_eligible", "El profesional ya no cumple los requisitos para formalizar el contrato."],
+  ["home_service_private_address_required", "Añade la dirección exacta en los datos privados antes de aceptar una oferta."],
+  ["professional_schedule_capacity_exceeded", "El profesional ya ha alcanzado su capacidad para esa franja horaria. Elige otra fecha, hora u oferta."],
 ];
 
-export function createApp(dependencies: { database: Database; config: AppConfig; storage: PrivateStorage }) {
+export function createApp(dependencies: { database: Database; config: AppConfig; storage: PrivateStorage; stripe?: Stripe | null }) {
   const { database, config, storage } = dependencies;
+  const stripe = dependencies.stripe === undefined ? stripeClient(config) : dependencies.stripe;
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", config.TRUST_PROXY);
@@ -42,7 +52,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use((request, response, next) => {
     const requestId = request.get("x-request-id")?.slice(0, 100) || randomUUID();
     response.setHeader("x-request-id", requestId);
-    response.setHeader("cache-control", request.path.startsWith("/api/") ? "no-store" : "public, max-age=300");
+    response.setHeader("cache-control", request.path.startsWith("/api/") ? "no-store" : "no-cache");
     next();
   });
 
@@ -76,7 +86,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.post(
     "/api/v1/billing/stripe/webhook",
     express.raw({ type: "application/json", limit: "1mb" }),
-    stripeWebhookHandler(database, config),
+    stripeWebhookHandler(database, config, stripe),
   );
 
   app.use(express.json({ limit: "1mb", strict: true }));
@@ -100,13 +110,19 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   });
 
   app.get("/api/v1/config", (_request, response) => response.json(publicRuntimeConfig(config)));
+  app.use("/api/v1", publicDirectoryRouter(database));
   app.post("/api/v1/auth/register", registrationLegalGate);
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
-  app.use("/api/v1", writeLimiter, marketplaceRouter(database));
+  app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
+  app.use("/api/v1", writeLimiter, marketplaceRouter(database, config, stripe));
+  app.use("/api/v1", writeLimiter, intelligenceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
+  app.use("/api/v1", writeLimiter, operatingSystemRouter(database, config, storage));
+  app.use("/api/v1", writeLimiter, homeServicesRouter(database));
+  app.use("/api/v1", writeLimiter, homeServicesLifecycleRouter(database));
   app.post("/api/v1/billing/setup-intent", sepaLegalGate(database));
-  app.use("/api/v1", writeLimiter, billingRouter(database, config));
+  app.use("/api/v1", writeLimiter, billingRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, professionalVerificationRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, evidenceUploadsRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, uploadsRouter(database, config, storage));
@@ -114,11 +130,21 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1", writeLimiter, adminRouter(database));
 
   const publicDir = join(process.cwd(), "public");
-  app.use(express.static(publicDir, { index: false, maxAge: config.NODE_ENV === "production" ? "1h" : 0 }));
+  app.use(express.static(publicDir, {
+    index: false,
+    etag: true,
+    maxAge: 0,
+    immutable: false,
+    setHeaders: (response) => response.setHeader("cache-control", "public, max-age=0, must-revalidate"),
+  }));
   app.get([
     "/",
     "/login",
     "/registro",
+    "/registro-cliente",
+    "/para-profesionales",
+    "/registro-profesional",
+    "/servicios-hogar",
     "/panel",
     "/verificar-email",
     "/restablecer",
@@ -129,6 +155,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/sepa",
     "/contacto",
   ], (_request, response) => {
+    response.setHeader("cache-control", "no-cache");
     response.sendFile(join(publicDir, "index.html"));
   });
 

@@ -1,0 +1,187 @@
+[data-registration-portal] input[type="hidden"] { display: none !important; }
+
+.portal-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 56px 0 88px;
+}
+
+.portal-heading {
+  max-width: 820px;
+  margin-bottom: 30px;
+}
+
+.portal-heading h1,
+.professional-portal h1 {
+  font-size: clamp(44px, 6vw, 76px);
+  line-height: 1;
+  letter-spacing: -.055em;
+  margin: 14px 0 22px;
+}
+
+.portal-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.portal-choice-card {
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.portal-choice-card h2 {
+  margin: 16px 0 12px;
+}
+
+.portal-choice-card p {
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.portal-choice-card ul {
+  margin: 8px 0 26px;
+  padding-left: 20px;
+  color: #405159;
+  line-height: 1.8;
+}
+
+.portal-choice-card .button {
+  margin-top: auto;
+}
+
+.client-choice {
+  border-top: 5px solid var(--orange);
+}
+
+.professional-choice {
+  border-top: 5px solid var(--teal);
+  background: linear-gradient(145deg, #fff 0%, #f0f8f6 100%);
+}
+
+.portal-badge {
+  display: inline-flex;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eef1ef;
+  color: #31434a;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.portal-register-wrap {
+  margin-top: 38px;
+}
+
+.professional-register-wrap {
+  width: min(920px, calc(100% - 32px));
+}
+
+.portal-form-actions {
+  justify-content: space-between;
+}
+
+.portal-success {
+  text-align: left;
+}
+
+.professional-entry-button {
+  border-color: var(--teal);
+  color: #165f5b;
+}
+
+.professional-portal-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, .75fr);
+  gap: 48px;
+  align-items: center;
+  padding: 18px 0 48px;
+}
+
+.professional-value-card {
+  border-top: 5px solid var(--teal);
+  background: linear-gradient(145deg, #ffffff, #edf8f6);
+}
+
+.professional-value-card h2 {
+  margin: 16px 0 10px;
+}
+
+.professional-value-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.professional-steps {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.professional-steps span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.professional-steps strong {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.professional-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.professional-benefits article {
+  border-left: 4px solid var(--teal);
+  background: rgba(255,255,255,.72);
+  border-radius: 0 12px 12px 0;
+  padding: 18px;
+}
+
+.professional-benefits strong,
+.professional-benefits span {
+  display: block;
+}
+
+.professional-benefits span {
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.portal-inline-loading {
+  padding: 24px 10px;
+}
+
+@media (max-width: 900px) {
+  .portal-choice-grid,
+  .professional-portal-hero,
+  .professional-benefits {
+    grid-template-columns: 1fr;
+  }
+  .portal-choice-card { min-height: auto; }
+  .professional-value-card { order: 2; }
+}
+
+@media (max-width: 640px) {
+  .portal-shell { padding-top: 30px; }
+  .portal-heading h1,
+  .professional-portal h1 { font-size: clamp(38px, 12vw, 54px); }
+  .portal-form-actions { flex-direction: column-reverse; align-items: stretch; }
+  .portal-form-actions .button { width: 100%; }
+}
