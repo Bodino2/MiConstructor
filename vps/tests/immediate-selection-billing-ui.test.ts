@@ -6,16 +6,22 @@ import test from "node:test";
 
 const adapterUrl = new URL("../public/selection-billing-ui.js", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
+const bootstrapUrl = new URL("../public/app-bootstrap.js", import.meta.url);
 const billingRouteUrl = new URL("../src/routes/billing.ts", import.meta.url);
 const marketplaceRouteUrl = new URL("../src/routes/marketplace.ts", import.meta.url);
 const migrationUrl = new URL("../migrations/009_immediate_selection_billing.sql", import.meta.url);
 const legacyWeeklyUrl = new URL("../../app/api/v1/facturacion/semanal/route.ts", import.meta.url);
 const legacyShortlistUrl = new URL("../../app/api/v1/proyectos/[id]/shortlist/route.ts", import.meta.url);
 
-test("el adaptador web de cobro por selección es JavaScript válido y carga antes de app.js", async () => {
+test("el adaptador web de cobro carga antes del bootstrap que delega en app.js", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(adapterUrl)], { stdio: "pipe" });
-  const index = await readFile(indexUrl, "utf8");
-  assert.match(index, /site-shell\.js[\s\S]*selection-billing-ui\.js[\s\S]*app\.js/);
+  execFileSync(process.execPath, ["--check", fileURLToPath(bootstrapUrl)], { stdio: "pipe" });
+  const [index, bootstrap] = await Promise.all([
+    readFile(indexUrl, "utf8"),
+    readFile(bootstrapUrl, "utf8"),
+  ]);
+  assert.match(index, /site-shell\.js[\s\S]*selection-billing-ui\.js[\s\S]*app-bootstrap\.js/);
+  assert.match(bootstrap, /await import\("\/app\.js"\)/);
 });
 
 test("la UI elimina la facturación semanal de nuevas selecciones y reintenta cargos individuales", async () => {
