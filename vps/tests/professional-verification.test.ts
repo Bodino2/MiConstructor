@@ -16,13 +16,15 @@ test("la verificación profesional conserva documentos auditables por tipo", asy
   assert.match(migration, /reviewed_by uuid REFERENCES users/);
 });
 
-test("la aprobación técnica queda ligada a la verificación documental", async () => {
+test("la aprobación técnica queda ligada a la verificación documental sin levantar suspensiones ajenas", async () => {
   const route = await readFile(routePath, "utf8");
   assert.match(route, /documentsApproved: Number\(row\?\.approved_document_count/);
   assert.match(route, /qualificationApproved: Boolean\(row\?\.has_approved_qualification\)/);
   assert.match(route, /const approved = readiness\.documentsApproved && readiness\.qualificationApproved/);
   assert.match(route, /\/admin\/qualifications\/:id\/decision/);
-  assert.match(route, /refreshProfessionalStatus\(client, row\.professional_id, false\)/);
+  assert.match(route, /const wasSuspended = existing\.verification_status === "SUSPENDIDO"/);
+  assert.match(route, /explicitlyReapprovingSuspendedQualification/);
+  assert.match(route, /!explicitlyReapprovingSuspendedQualification/);
 });
 
 test("el profesional debe enviar identidad y situación fiscal en el mismo paquete", async () => {
