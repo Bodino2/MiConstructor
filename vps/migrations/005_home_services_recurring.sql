@@ -87,6 +87,58 @@ CREATE TABLE home_service_visits (
 CREATE INDEX home_service_visits_schedule_idx ON home_service_visits (scheduled_date, status);
 CREATE INDEX home_service_visits_engagement_status_idx ON home_service_visits (engagement_id, status, sequence_number DESC);
 
+CREATE OR REPLACE FUNCTION enforce_home_service_schedule_capacity() RETURNS trigger AS $$
+DECLARE
+  target_professional uuid;
+  target_duration integer;
+  target_capacity integer;
+  overlapping integer;
+BEGIN
+  IF NEW.status NOT IN ('PROGRAMADA','EN_CURSO') OR NEW.scheduled_time IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT e.professional_id,
+         e.estimated_duration_minutes,
+         COALESCE(pa.concurrent_capacity, 1)
+    INTO target_professional, target_duration, target_capacity
+    FROM home_service_engagements e
+    LEFT JOIN professional_availability pa ON pa.professional_id=e.professional_id
+   WHERE e.id=NEW.engagement_id;
+
+  IF target_professional IS NULL THEN
+    RAISE EXCEPTION 'home_service_engagement_missing';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(target_professional::text || ':' || NEW.scheduled_date::text, 0)
+  );
+
+  SELECT count(*)::integer
+    INTO overlapping
+    FROM home_service_visits v
+    JOIN home_service_engagements existing_engagement ON existing_engagement.id=v.engagement_id
+   WHERE existing_engagement.professional_id=target_professional
+     AND v.scheduled_date=NEW.scheduled_date
+     AND v.scheduled_time IS NOT NULL
+     AND v.status IN ('PROGRAMADA','EN_CURSO')
+     AND v.id<>NEW.id
+     AND v.scheduled_time < NEW.scheduled_time + make_interval(mins => target_duration)
+     AND v.scheduled_time + make_interval(mins => existing_engagement.estimated_duration_minutes) > NEW.scheduled_time;
+
+  IF overlapping >= target_capacity THEN
+    RAISE EXCEPTION 'professional_schedule_capacity_exceeded';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER home_service_visits_capacity_guard
+BEFORE INSERT OR UPDATE OF engagement_id, scheduled_date, scheduled_time, status
+ON home_service_visits
+FOR EACH ROW EXECUTE FUNCTION enforce_home_service_schedule_capacity();
+
 CREATE TABLE home_service_visit_events (
   id bigserial PRIMARY KEY,
   visit_id uuid NOT NULL REFERENCES home_service_visits(id) ON DELETE CASCADE,
