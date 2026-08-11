@@ -4,13 +4,14 @@ import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import type Stripe from "stripe";
 import type { AppConfig } from "./config.js";
 import { publicRuntimeConfig } from "./config.js";
 import type { Database } from "./db.js";
 import { assertDatabaseReady } from "./db.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
-import { billingRouter, stripeWebhookHandler } from "./routes/billing.js";
+import { billingRouter, stripeClient, stripeWebhookHandler } from "./routes/billing.js";
 import { executionRouter } from "./routes/execution.js";
 import { homeServicesLifecycleRouter } from "./routes/home-services-lifecycle.js";
 import { homeServicesRouter } from "./routes/home-services.js";
@@ -25,8 +26,9 @@ import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
 
-export function createApp(dependencies: { database: Database; config: AppConfig; storage: PrivateStorage }) {
+export function createApp(dependencies: { database: Database; config: AppConfig; storage: PrivateStorage; stripe?: Stripe | null }) {
   const { database, config, storage } = dependencies;
+  const stripe = dependencies.stripe === undefined ? stripeClient(config) : dependencies.stripe;
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", config.TRUST_PROXY);
@@ -68,7 +70,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.post(
     "/api/v1/billing/stripe/webhook",
     express.raw({ type: "application/json", limit: "1mb" }),
-    stripeWebhookHandler(database, config),
+    stripeWebhookHandler(database, config, stripe),
   );
 
   app.use(express.json({ limit: "1mb", strict: true }));
@@ -97,14 +99,14 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
   app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
-  app.use("/api/v1", writeLimiter, marketplaceRouter(database));
+  app.use("/api/v1", writeLimiter, marketplaceRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, intelligenceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
   app.use("/api/v1", writeLimiter, operatingSystemRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, homeServicesRouter(database));
   app.use("/api/v1", writeLimiter, homeServicesLifecycleRouter(database));
   app.post("/api/v1/billing/setup-intent", sepaLegalGate(database));
-  app.use("/api/v1", writeLimiter, billingRouter(database, config));
+  app.use("/api/v1", writeLimiter, billingRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, uploadsRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, legalSupportRouter(database));
   app.use("/api/v1", writeLimiter, adminRouter(database));
