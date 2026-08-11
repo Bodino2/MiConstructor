@@ -35,7 +35,8 @@ before(async () => {
   await migrate(databaseUrl);
   await database.query(`TRUNCATE TABLE
     messages, conversations, reviews, milestone_evidence, milestones,
-    insurance_policies, portfolio_files, portfolio_projects, stored_files,
+    insurance_policies, portfolio_files, portfolio_projects,
+    professional_verification_documents, stored_files,
     billable_items, weekly_invoices, shortlists, proposals, projects,
     billing_accounts, professional_specialty_qualifications, auth_tokens,
     auth_sessions, email_outbox, audit_events, stripe_webhook_events, users
@@ -62,7 +63,35 @@ async function verifyLatestEmail(email: string) {
   assert.equal(response.status, 200);
 }
 
-test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pendiente", async () => {
+async function approveProfessionalForTests(professionalId: string) {
+  await database.query(
+    "UPDATE professional_specialty_qualifications SET verification_status = 'APROBADO', reviewed_at = now() WHERE professional_id = $1",
+    [professionalId],
+  );
+  const identityFileId = randomUUID();
+  const taxFileId = randomUUID();
+  await database.query(
+    `INSERT INTO stored_files
+      (id, owner_id, purpose, object_key, original_name, content_type, size_bytes, sha256, moderation_status)
+     VALUES
+      ($1, $3, 'VERIFICACION_PROFESIONAL', $4, 'identidad.pdf', 'application/pdf', 1, $6, 'APROBADO'),
+      ($2, $3, 'VERIFICACION_PROFESIONAL', $5, 'situacion-fiscal.pdf', 'application/pdf', 1, $6, 'APROBADO')`,
+    [identityFileId, taxFileId, professionalId, `tests/${identityFileId}`, `tests/${taxFileId}`, "a".repeat(64)],
+  );
+  await database.query(
+    `INSERT INTO professional_verification_documents
+      (id, professional_id, file_id, document_type, status, reviewed_at)
+     VALUES
+      ($1, $3, $4, 'IDENTIDAD', 'APROBADO', now()),
+      ($2, $3, $5, 'SITUACION_FISCAL', 'APROBADO', now())`,
+    [randomUUID(), randomUUID(), professionalId, identityFileId, taxFileId],
+  );
+  await database.query("UPDATE users SET verification_status = 'APROBADO' WHERE id = $1", [professionalId]);
+  const status = await database.query<{ verification_status: string }>("SELECT verification_status FROM users WHERE id = $1", [professionalId]);
+  assert.equal(status.rows[0]?.verification_status, "APROBADO");
+}
+
+test("flujo real: alta, verificación, propuesta, shortlist, contrato y cargo pendiente", async () => {
   const clientEmail = "cliente@example.es";
   const professionalEmail = "electricista@example.es";
   const clientRegister = await request(application).post("/api/v1/auth/register").send({
@@ -105,8 +134,15 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
 
   const professional = await database.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [professionalEmail]);
   const professionalId = professional.rows[0]!.id;
+
   await database.query("UPDATE users SET verification_status = 'APROBADO' WHERE id = $1", [professionalId]);
-  await database.query("UPDATE professional_specialty_qualifications SET verification_status = 'APROBADO' WHERE professional_id = $1", [professionalId]);
+  const prematureApproval = await database.query<{ verification_status: string }>(
+    "SELECT verification_status FROM users WHERE id = $1",
+    [professionalId],
+  );
+  assert.equal(prematureApproval.rows[0]?.verification_status, "PENDIENTE_REVISION");
+
+  await approveProfessionalForTests(professionalId);
   await database.query("UPDATE billing_accounts SET status = 'ACTIVO', stripe_customer_id = 'cus_test', stripe_payment_method_id = 'pm_test' WHERE professional_id = $1", [professionalId]);
 
   const clientAgent = request.agent(application);
@@ -138,6 +174,30 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
     message: "Incluye nuevo cuadro, cableado, mecanismos, pruebas reglamentarias y certificado de instalación.",
   });
   assert.equal(proposal.status, 201, proposal.text);
+  const proposalId = proposal.body.proposal.id;
+
+  await database.query(
+    "UPDATE professional_specialty_qualifications SET verification_status = 'RECHAZADO' WHERE professional_id = $1 AND specialty_slug = 'electricidad'",
+    [professionalId],
+  );
+  const staleShortlist = await clientAgent.post(`/api/v1/projects/${projectId}/shortlist`).send({ professionalId });
+  assert.equal(staleShortlist.status, 409, staleShortlist.text);
+  assert.match(staleShortlist.body.error, /ya no cumple los requisitos/);
+  await database.query(
+    "UPDATE professional_specialty_qualifications SET verification_status = 'APROBADO' WHERE professional_id = $1 AND specialty_slug = 'electricidad'",
+    [professionalId],
+  );
+
+  const contractBeforeSelection = await clientAgent.post(`/api/v1/projects/${projectId}/contracts/accept`).send({
+    proposalId,
+    milestones: [{
+      title: "Instalación completa",
+      description: "Ejecución y certificación de la instalación eléctrica acordada.",
+      amountCents: 950_000,
+    }],
+  });
+  assert.equal(contractBeforeSelection.status, 409, contractBeforeSelection.text);
+  assert.match(contractBeforeSelection.body.error, /seleccionar al profesional/);
 
   const shortlist = await clientAgent.post(`/api/v1/projects/${projectId}/shortlist`).send({ professionalId });
   assert.equal(shortlist.status, 201, shortlist.text);
@@ -152,6 +212,17 @@ test("flujo real: alta, verificación, propuesta, shortlist y cargo semanal pend
   assert.equal(duplicate.status, 200);
   const count = await database.query<{ count: string }>("SELECT count(*)::text AS count FROM billable_items WHERE professional_id = $1", [professionalId]);
   assert.equal(count.rows[0]!.count, "1");
+
+  const contract = await clientAgent.post(`/api/v1/projects/${projectId}/contracts/accept`).send({
+    proposalId,
+    milestones: [{
+      title: "Instalación completa",
+      description: "Ejecución y certificación de la instalación eléctrica acordada.",
+      amountCents: 950_000,
+    }],
+  });
+  assert.equal(contract.status, 201, contract.text);
+  assert.equal(contract.body.projectStatus, "EN_CURSO");
 });
 
 test("el panel admin controla cuentas y expone overview, proyectos y auditoría", async () => {
@@ -274,7 +345,7 @@ test("aceptaciones legales, páginas públicas, mandato SEPA y chat de soporte",
      VALUES
       ($1, 'support-user@example.es', 'Support User', $2, 'cliente', $3, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now()),
       ($4, 'support-admin@miconstructor.es', 'Support Admin', $5, 'admin', $6, true, 'ACTIVO', 'NO_APLICA', 'test-v1', now()),
-      ($7, 'support-pro@example.es', 'Support Pro', $8, 'profesional', $9, true, 'ACTIVO', 'APROBADO', 'test-v1', now())`,
+      ($7, 'support-pro@example.es', 'Support Pro', $8, 'profesional', $9, true, 'ACTIVO', 'PENDIENTE_REVISION', 'test-v1', now())`,
     [userId, userHash, `CLIENT-${userId}`, adminId, adminHash, `ADMIN-${adminId}`, professionalId, professionalHash, `PRO-${professionalId}`],
   );
   await database.query("INSERT INTO billing_accounts (professional_id, status) VALUES ($1, 'PENDIENTE_MANDATO')", [professionalId]);
