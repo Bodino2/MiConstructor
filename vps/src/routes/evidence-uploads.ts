@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Router } from "express";
 import multer from "multer";
+import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
+import { withTransaction } from "../db.js";
 import { audit } from "../services/audit.js";
 import { requireAuth, requireRole } from "../services/auth.js";
 import type { PrivateStorage } from "../services/storage.js";
@@ -34,11 +36,9 @@ export function evidenceUploadsRouter(database: Database, config: AppConfig, sto
     upload.single("file"),
     async (request, response, next) => {
       let storedKey: string | null = null;
-      let storedFileId: string | null = null;
       try {
-        if (!/^[0-9a-f-]{36}$/i.test(request.params.id)) {
-          return response.status(400).json({ error: "Hito no válido." });
-        }
+        const milestoneId = z.string().uuid().safeParse(request.params.id);
+        if (!milestoneId.success) return response.status(400).json({ error: "Hito no válido." });
         if (!request.file) return response.status(400).json({ error: "Debes adjuntar una evidencia." });
 
         const milestone = await database.query<{ assigned_professional_id: string | null; status: string; project_id: string }>(
@@ -46,7 +46,7 @@ export function evidenceUploadsRouter(database: Database, config: AppConfig, sto
              FROM milestones m
              JOIN projects p ON p.id = m.project_id
             WHERE m.id = $1`,
-          [request.params.id],
+          [milestoneId.data],
         );
         const row = milestone.rows[0];
         if (!row || row.assigned_professional_id !== request.user!.id) {
@@ -58,34 +58,34 @@ export function evidenceUploadsRouter(database: Database, config: AppConfig, sto
 
         const stored = await storage.put(request.file.buffer, request.file.originalname, request.file.mimetype);
         storedKey = stored.key;
-        storedFileId = randomUUID();
-        await database.query(
-          `INSERT INTO stored_files
-            (id, owner_id, purpose, object_key, original_name, content_type, size_bytes, sha256)
-           VALUES ($1, $2, 'HITO_EVIDENCIA', $3, $4, $5, $6, $7)`,
-          [
-            storedFileId,
-            request.user!.id,
-            stored.key,
-            stored.originalName,
-            stored.contentType,
-            stored.sizeBytes,
-            createHash("sha256").update(request.file.buffer).digest("hex"),
-          ],
-        );
-        await audit(database, {
-          actorUserId: request.user!.id,
-          action: "MILESTONE_EVIDENCE_FILE_UPLOADED",
-          entityType: "milestone",
-          entityId: request.params.id,
-          ip: request.ip,
-          metadata: { fileId: storedFileId, projectId: row.project_id, contentType: stored.contentType },
+        const storedFileId = randomUUID();
+        await withTransaction(database, async (client) => {
+          await client.query(
+            `INSERT INTO stored_files
+              (id, owner_id, purpose, object_key, original_name, content_type, size_bytes, sha256)
+             VALUES ($1, $2, 'HITO_EVIDENCIA', $3, $4, $5, $6, $7)`,
+            [
+              storedFileId,
+              request.user!.id,
+              stored.key,
+              stored.originalName,
+              stored.contentType,
+              stored.sizeBytes,
+              createHash("sha256").update(request.file!.buffer).digest("hex"),
+            ],
+          );
+          await audit(client, {
+            actorUserId: request.user!.id,
+            action: "MILESTONE_EVIDENCE_FILE_UPLOADED",
+            entityType: "milestone",
+            entityId: milestoneId.data,
+            ip: request.ip,
+            metadata: { fileId: storedFileId, projectId: row.project_id, contentType: stored.contentType },
+          });
         });
+        storedKey = null;
         response.status(201).json({ success: true, fileId: storedFileId });
       } catch (error) {
-        if (storedFileId) {
-          await database.query("DELETE FROM stored_files WHERE id = $1", [storedFileId]).catch(() => undefined);
-        }
         if (storedKey) await storage.delete(storedKey).catch(() => undefined);
         next(error);
       }
