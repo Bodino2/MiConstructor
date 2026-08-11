@@ -18,6 +18,7 @@ import { audit } from "../services/audit.js";
 import { requireAuth, requireRole } from "../services/auth.js";
 
 const frequencySchema = z.enum(["PUNTUAL", "SEMANAL", "CADA_2_SEMANAS", "MENSUAL"]);
+type ServiceFrequency = z.infer<typeof frequencySchema>;
 
 const requestSchema = z.object({
   serviceSlug: z.string().trim().min(2).max(80),
@@ -159,12 +160,12 @@ export function homeServicesRouter(database: Database) {
   router.post("/home-services/requests/:id/offers", requireAuth, requireRole("profesional"), async (request, response, next) => {
     try {
       const requestId = z.string().uuid().safeParse(request.params.id);
+      if (!requestId.success) return response.status(400).json({ error: "Solicitud no válida." });
       const parsed = offerSchema.safeParse(request.body);
-      if (!requestId.success || !parsed.success) return response.status(400).json({ error: !requestId.success ? "Solicitud no válida." : parsed.error.issues[0]?.message });
+      if (!parsed.success) return response.status(400).json({ error: parsed.error.issues[0]?.message });
       if (parsed.data.firstAvailableDate < todayIso()) return response.status(400).json({ error: "La primera fecha disponible no puede estar en el pasado." });
-      const state = await database.query<{ status: string; vertical: string; verification_status: string; qualification_status: string | null }>(
-        `SELECT r.status, r.vertical, u.verification_status,
-                q.verification_status AS qualification_status
+      const state = await database.query<{ status: string; verification_status: string; qualification_status: string | null }>(
+        `SELECT r.status, u.verification_status, q.verification_status AS qualification_status
            FROM home_service_requests r
            JOIN users u ON u.id=$2
            LEFT JOIN professional_specialty_qualifications q ON q.professional_id=u.id
@@ -196,7 +197,7 @@ export function homeServicesRouter(database: Database) {
       const offerId = z.string().uuid().safeParse(request.params.offerId);
       if (!requestId.success || !offerId.success) return response.status(400).json({ error: "Selección no válida." });
       const result = await withTransaction(database, async (client) => {
-        const req = await client.query<{ client_id: string; service_slug: string; frequency: string; requested_start_date: string; preferred_time_start: string | null; preferred_time_end: string | null; status: string }>(
+        const req = await client.query<{ client_id: string; service_slug: string; frequency: ServiceFrequency; requested_start_date: string; preferred_time_start: string | null; preferred_time_end: string | null; status: string }>(
           `SELECT client_id, service_slug, frequency, requested_start_date::text,
                   preferred_time_start::text, preferred_time_end::text, status
              FROM home_service_requests WHERE id=$1 FOR UPDATE`, [requestId.data]);
@@ -261,8 +262,9 @@ export function homeServicesRouter(database: Database) {
       if (!id.success) return response.status(400).json({ error: "Servicio no válido." });
       const result = await database.query(
         `UPDATE home_service_engagements SET status='PAUSADO', paused_at=now(), next_visit_date=NULL, updated_at=now()
-          WHERE id=$1 AND client_id=$2 AND status='ACTIVO' RETURNING id,status`, [id.data, request.user!.id]);
+          WHERE id=$1 AND client_id=$2 AND status='ACTIVO' AND frequency<>'PUNTUAL' RETURNING id,status`, [id.data, request.user!.id]);
       if (!result.rows[0]) return response.status(409).json({ error: "El servicio no puede pausarse en su estado actual." });
+      await audit(database, { actorUserId: request.user!.id, action: "HOME_SERVICE_PAUSED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip });
       response.json({ engagement: result.rows[0] });
     } catch (error) { next(error); }
   });
@@ -272,11 +274,10 @@ export function homeServicesRouter(database: Database) {
       const id = z.string().uuid().safeParse(request.params.id);
       if (!id.success) return response.status(400).json({ error: "Servicio no válido." });
       const result = await withTransaction(database, async (client) => {
-        const engagement = await client.query<{ frequency: "PUNTUAL"|"SEMANAL"|"CADA_2_SEMANAS"|"MENSUAL"; preferred_time_start: string | null; status: string }>(
+        const engagement = await client.query<{ frequency: ServiceFrequency; preferred_time_start: string | null; status: string }>(
           "SELECT frequency, preferred_time_start::text, status FROM home_service_engagements WHERE id=$1 AND client_id=$2 FOR UPDATE", [id.data, request.user!.id]);
         const row = engagement.rows[0];
-        if (!row || row.status !== "PAUSADO") return null;
-        if (row.frequency === "PUNTUAL") return null;
+        if (!row || row.status !== "PAUSADO" || row.frequency === "PUNTUAL") return null;
         const last = await client.query<{ scheduled_date: string; sequence_number: number }>(
           "SELECT scheduled_date::text, sequence_number FROM home_service_visits WHERE engagement_id=$1 ORDER BY sequence_number DESC LIMIT 1", [id.data]);
         if (!last.rows[0]) return null;
@@ -288,6 +289,7 @@ export function homeServicesRouter(database: Database) {
         await client.query("UPDATE home_service_engagements SET status='ACTIVO', paused_at=NULL, next_visit_date=$2, updated_at=now() WHERE id=$1", [id.data, nextDate]);
         await client.query("INSERT INTO home_service_visits (id, engagement_id, sequence_number, scheduled_date, scheduled_time) VALUES ($1,$2,$3,$4,$5)", [visitId, id.data, sequence, nextDate, row.preferred_time_start]);
         await client.query("INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type, metadata) VALUES ($1,$2,'PROGRAMADA',jsonb_build_object('resumed',true))", [visitId, request.user!.id]);
+        await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_RESUMED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip, metadata: { nextDate } });
         return { id: id.data, status: "ACTIVO", nextVisitDate: nextDate, visitId };
       });
       if (!result) return response.status(409).json({ error: "El servicio no puede reanudarse." });
@@ -305,10 +307,12 @@ export function homeServicesRouter(database: Database) {
       const row = result.rows[0];
       if (!row || (request.user!.role !== "admin" && row.client_id !== request.user!.id && row.professional_id !== request.user!.id)) return response.status(404).json({ error: "Servicio no encontrado." });
       if (["CANCELADO", "FINALIZADO"].includes(row.status)) return response.status(409).json({ error: "El servicio ya está cerrado." });
+      const visitStatus = request.user!.role === "profesional" ? "CANCELADA_PROFESIONAL" : "CANCELADA_CLIENTE";
       await withTransaction(database, async (client) => {
         await client.query("UPDATE home_service_engagements SET status='CANCELADO', cancelled_at=now(), cancellation_reason=$2, next_visit_date=NULL, updated_at=now() WHERE id=$1", [id.data, parsed.data.reason]);
         await client.query("UPDATE home_service_requests SET status='CANCELADO', updated_at=now() WHERE id=$1", [row.request_id]);
-        await client.query("UPDATE home_service_visits SET status=CASE WHEN client_id_match THEN 'CANCELADA_CLIENTE' ELSE 'CANCELADA_PROFESIONAL' END FROM (SELECT $2::boolean AS client_id_match) x WHERE engagement_id=$1 AND status='PROGRAMADA'", [id.data, row.client_id === request.user!.id]);
+        await client.query("UPDATE home_service_visits SET status=$2, updated_at=now() WHERE engagement_id=$1 AND status='PROGRAMADA'", [id.data, visitStatus]);
+        await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_CANCELLED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip, metadata: { reason: parsed.data.reason, visitStatus } });
       });
       response.json({ success: true, status: "CANCELADO" });
     } catch (error) { next(error); }
@@ -341,7 +345,7 @@ export function homeServicesRouter(database: Database) {
             WHERE v.id=$1 AND e.professional_id=$2 FOR UPDATE`, [id.data, request.user!.id]);
         const visit = visits.rows[0];
         if (!visit || !["PROGRAMADA", "EN_CURSO"].includes(visit.status)) return null;
-        const engagements = await client.query<{ frequency: "PUNTUAL"|"SEMANAL"|"CADA_2_SEMANAS"|"MENSUAL"; status: string; preferred_time_start: string | null; request_id: string }>(
+        const engagements = await client.query<{ frequency: ServiceFrequency; status: string; preferred_time_start: string | null; request_id: string }>(
           "SELECT frequency,status,preferred_time_start::text,request_id FROM home_service_engagements WHERE id=$1 FOR UPDATE", [visit.engagement_id]);
         const engagement = engagements.rows[0];
         if (!engagement || engagement.status !== "ACTIVO") return null;
@@ -351,6 +355,7 @@ export function homeServicesRouter(database: Database) {
         if (!nextDate) {
           await client.query("UPDATE home_service_engagements SET status='FINALIZADO', next_visit_date=NULL, updated_at=now() WHERE id=$1", [visit.engagement_id]);
           await client.query("UPDATE home_service_requests SET status='FINALIZADO', updated_at=now() WHERE id=$1", [engagement.request_id]);
+          await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_VISIT_COMPLETED", entityType: "home_service_visit", entityId: id.data, ip: request.ip, metadata: { recurring: false } });
           return { completed: true, engagementStatus: "FINALIZADO", nextVisit: null };
         }
         const nextId = randomUUID();
@@ -358,6 +363,7 @@ export function homeServicesRouter(database: Database) {
         await client.query("INSERT INTO home_service_visits (id, engagement_id, sequence_number, scheduled_date, scheduled_time) VALUES ($1,$2,$3,$4,$5)", [nextId, visit.engagement_id, sequence, nextDate, engagement.preferred_time_start]);
         await client.query("INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type, metadata) VALUES ($1,$2,'PROGRAMADA',jsonb_build_object('autoRecurring',true,'previousVisitId',$3::text))", [nextId, request.user!.id, id.data]);
         await client.query("UPDATE home_service_engagements SET next_visit_date=$2, updated_at=now() WHERE id=$1", [visit.engagement_id, nextDate]);
+        await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_VISIT_COMPLETED", entityType: "home_service_visit", entityId: id.data, ip: request.ip, metadata: { recurring: true, nextDate, nextVisitId: nextId } });
         return { completed: true, engagementStatus: "ACTIVO", nextVisit: { id: nextId, sequenceNumber: sequence, scheduledDate: nextDate } };
       });
       if (!result) return response.status(409).json({ error: "La visita no puede finalizarse." });
