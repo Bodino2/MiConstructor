@@ -89,7 +89,7 @@ test("las fechas mensuales conservan el día ancla y la fecha de negocio usa Eur
   assert.equal(madridDateIso(new Date("2026-07-01T22:30:00Z")), "2026-07-02");
 });
 
-test("flujo recurrente completo: onboarding, autorización, ofertas, visita, pausa y reanudación", async () => {
+test("flujo recurrente completo: onboarding, privacidad, autorización, ofertas, visita, pausa y reanudación", async () => {
   const catalog = await request(application).get("/api/v1/assessments");
   assert.equal(catalog.status, 200, catalog.text);
   assert.ok(catalog.body.specialties.some((item: { slug: string }) => item.slug === "limpieza_profesional"));
@@ -98,10 +98,7 @@ test("flujo recurrente completo: onboarding, autorización, ofertas, visita, pau
   const publicAssessment = await request(application).get("/api/v1/assessments/limpieza_profesional");
   assert.equal(publicAssessment.status, 200, publicAssessment.text);
   assert.equal(publicAssessment.body.assessment.questionCount, 15);
-  const assessment = publicAssessment.body.assessment as {
-    version: string;
-    questions: Array<{ id: string }>;
-  };
+  const assessment = publicAssessment.body.assessment as { version: string; questions: Array<{ id: string }> };
   const answers = Object.fromEntries(assessment.questions.map((question, index) => [question.id, ["a", "b", "c"][index % 3]]));
 
   const professionalEmail = "limpieza-pro@example.es";
@@ -165,7 +162,11 @@ test("flujo recurrente completo: onboarding, autorización, ofertas, visita, pau
 
   const market = await professionalAgent.get("/api/v1/home-services/requests");
   assert.equal(market.status, 200, market.text);
-  assert.ok(market.body.requests.some((item: { id: string }) => item.id === requestId));
+  const marketRequest = market.body.requests.find((item: { id: string }) => item.id === requestId) as Record<string, unknown>;
+  assert.ok(marketRequest);
+  assert.equal("service_address" in marketRequest, false);
+  assert.equal("access_notes" in marketRequest, false);
+  assert.equal("notes" in marketRequest, false);
 
   const offer = await professionalAgent.post(`/api/v1/home-services/requests/${requestId}/offers`).send({
     amountCentsPerVisit: 6500,
@@ -196,11 +197,39 @@ test("flujo recurrente completo: onboarding, autorización, ofertas, visita, pau
   assert.equal(rejectedAccept.status, 409, rejectedAccept.text);
   await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [professionalId]);
 
+  const missingPrivateAddress = await clientAgent.post(`/api/v1/home-services/requests/${requestId}/offers/${offerId}/accept`);
+  assert.equal(missingPrivateAddress.status, 409, missingPrivateAddress.text);
+  assert.match(missingPrivateAddress.body.error, /dirección exacta/i);
+  const afterMissing = await database.query<{ status: string; assigned_professional_id: string | null }>("SELECT status,assigned_professional_id FROM home_service_requests WHERE id=$1", [requestId]);
+  assert.equal(afterMissing.rows[0]!.status, "PUBLICADO");
+  assert.equal(afterMissing.rows[0]!.assigned_professional_id, null);
+
+  const foreignPrivateUpdate = await otherClientAgent.put(`/api/v1/home-services/requests/${requestId}/private-details`).send({ serviceAddress: "Calle Ajena 1", accessNotes: "No autorizado" });
+  assert.equal(foreignPrivateUpdate.status, 404, foreignPrivateUpdate.text);
+  const professionalBeforeAssignment = await professionalAgent.get("/api/v1/home-services/engagements/private-details");
+  assert.equal(professionalBeforeAssignment.status, 200, professionalBeforeAssignment.text);
+  assert.deepEqual(professionalBeforeAssignment.body.privateDetails, []);
+
+  const privateUpdate = await clientAgent.put(`/api/v1/home-services/requests/${requestId}/private-details`).send({
+    serviceAddress: "Calle Ejemplo 12, 2º B, 23700 Linares",
+    accessNotes: "Llamar al portero al llegar. No se almacena ningún código permanente.",
+  });
+  assert.equal(privateUpdate.status, 200, privateUpdate.text);
+
   const accepted = await clientAgent.post(`/api/v1/home-services/requests/${requestId}/offers/${offerId}/accept`);
   assert.equal(accepted.status, 201, accepted.text);
   const engagementId = accepted.body.engagement.id as string;
   const firstVisitId = accepted.body.visit.id as string;
   assert.ok(accepted.body.visit.scheduledDate >= today);
+
+  const professionalPrivate = await professionalAgent.get("/api/v1/home-services/engagements/private-details");
+  assert.equal(professionalPrivate.status, 200, professionalPrivate.text);
+  assert.equal(professionalPrivate.body.privateDetails.length, 1);
+  assert.equal(professionalPrivate.body.privateDetails[0].engagementId, engagementId);
+  assert.equal(professionalPrivate.body.privateDetails[0].serviceAddress, "Calle Ejemplo 12, 2º B, 23700 Linares");
+  const otherPrivate = await otherClientAgent.get("/api/v1/home-services/engagements/private-details");
+  assert.equal(otherPrivate.status, 200, otherPrivate.text);
+  assert.deepEqual(otherPrivate.body.privateDetails, []);
 
   const prematureComplete = await professionalAgent.post(`/api/v1/home-services/visits/${firstVisitId}/complete`).send({ notes: "No debe completarse directamente." });
   assert.equal(prematureComplete.status, 409, prematureComplete.text);
