@@ -13,10 +13,12 @@ import { authRouter } from "./routes/auth.js";
 import { billingRouter, stripeWebhookHandler } from "./routes/billing.js";
 import { executionRouter } from "./routes/execution.js";
 import { homeServicesRouter } from "./routes/home-services.js";
+import { intelligenceRouter } from "./routes/intelligence.js";
 import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./routes/legal-support.js";
 import { marketplaceRouter } from "./routes/marketplace.js";
 import { mobileAuthRouter } from "./routes/mobile-auth.js";
 import { operatingSystemRouter } from "./routes/operating-system.js";
+import { publicDirectoryRouter } from "./routes/public-directory.js";
 import { unifiedAssessmentsRouter } from "./routes/unified-assessments.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
@@ -89,11 +91,13 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   });
 
   app.get("/api/v1/config", (_request, response) => response.json(publicRuntimeConfig(config)));
+  app.use("/api/v1", publicDirectoryRouter(database));
   app.post("/api/v1/auth/register", registrationLegalGate);
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
   app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database));
+  app.use("/api/v1", writeLimiter, intelligenceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
   app.use("/api/v1", writeLimiter, operatingSystemRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, homeServicesRouter(database));
@@ -109,6 +113,9 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/",
     "/login",
     "/registro",
+    "/registro-cliente",
+    "/para-profesionales",
+    "/registro-profesional",
     "/panel",
     "/verificar-email",
     "/restablecer",
