@@ -23,6 +23,22 @@ function hslNotify(message, error = false) {
   window.setTimeout(() => { hsLifecycleToast.hidden = true; }, 4500);
 }
 
+function hardenRequestPrivacyCopy() {
+  const locationInput = document.querySelector('#hs-request-form input[name="location"]');
+  if (locationInput) {
+    locationInput.placeholder = "Linares, Jaén · zona/localidad, no dirección exacta";
+    const label = locationInput.closest("label");
+    if (label && !label.querySelector(".hs-public-field-note")) {
+      const note = document.createElement("small");
+      note.className = "hs-public-field-note";
+      note.textContent = "Esta zona es visible para profesionales antes de contratar. La dirección exacta no debe escribirse aquí.";
+      locationInput.insertAdjacentElement("afterend", note);
+    }
+  }
+  const notes = document.querySelector('#hs-request-form textarea[name="notes"]');
+  if (notes) notes.placeholder = "Describe tareas y prioridades. No incluyas teléfono, email, dirección exacta, llaves ni códigos de acceso.";
+}
+
 async function addClientWithdrawal() {
   const me = await hslApi("/api/v1/auth/me").catch(() => ({ user: null }));
   if (me.user?.role !== "cliente") return;
@@ -69,6 +85,7 @@ async function addProfessionalOffers() {
 
 async function enhanceHomeServicesLifecycle() {
   if (location.pathname !== "/servicios-hogar") return;
+  hardenRequestPrivacyCopy();
   await Promise.all([addClientWithdrawal(), addProfessionalOffers()]);
 }
 
