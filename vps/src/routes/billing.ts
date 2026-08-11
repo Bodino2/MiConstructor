@@ -43,13 +43,12 @@ async function suspendForInvoiceFailure(database: Database, invoiceId: string, r
         WHERE professional_id = $1`,
       [row.professional_id, overdue.rows[0]?.total ?? row.total_cents, reason.slice(0, 500)],
     );
-    await client.query(
-      `UPDATE users SET verification_status = 'SUSPENDIDO',
-          verification_reason = 'Cuenta suspendida por saldo pendiente.', updated_at = now()
-        WHERE id = $1`,
-      [row.professional_id],
-    );
-    await audit(client, { action: "BILLING_FAILED_ACCOUNT_SUSPENDED", entityType: "invoice", entityId: invoiceId, metadata: { professionalId: row.professional_id } });
+    await audit(client, {
+      action: "BILLING_FAILED_ACCOUNT_SUSPENDED",
+      entityType: "invoice",
+      entityId: invoiceId,
+      metadata: { professionalId: row.professional_id },
+    });
   });
 }
 
@@ -76,13 +75,23 @@ async function markInvoicePaid(database: Database, invoiceId: string) {
           WHERE professional_id = $1 AND stripe_payment_method_id IS NOT NULL`,
         [row.professional_id],
       );
+      // Compatibility recovery for accounts suspended by older MiConstructor releases.
+      // Never lift a compliance/manual suspension after a successful payment.
       await client.query(
-        `UPDATE users SET verification_status = CASE
-             WHEN EXISTS (SELECT 1 FROM professional_specialty_qualifications q
-                           WHERE q.professional_id = users.id AND q.verification_status = 'APROBADO')
-             THEN 'APROBADO' ELSE 'PENDIENTE_REVISION' END,
-             verification_reason = NULL, updated_at = now()
-          WHERE id = $1 AND verification_status = 'SUSPENDIDO'`,
+        `UPDATE users
+            SET verification_status = CASE
+                  WHEN miconstructor_professional_verification_ready(id) THEN 'APROBADO'
+                  ELSE 'PENDIENTE_REVISION'
+                END,
+                verification_reason = CASE
+                  WHEN miconstructor_professional_verification_ready(id)
+                    THEN 'Verificación técnica y documental completada.'
+                  ELSE 'Pendiente de completar la verificación técnica y documental obligatoria.'
+                END,
+                updated_at = now()
+          WHERE id = $1
+            AND verification_status = 'SUSPENDIDO'
+            AND verification_reason = 'Cuenta suspendida por saldo pendiente.'`,
         [row.professional_id],
       );
     } else {
@@ -195,13 +204,28 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
           WHERE status = 'ACTIVO' AND stripe_customer_id IS NOT NULL AND stripe_payment_method_id IS NOT NULL`,
       );
       const created: string[] = [];
+      const deferred: string[] = [];
       for (const account of accounts.rows) {
         const invoice = await withTransaction(database, async (client) => {
-          const existing = await client.query<{ id: string }>(
-            "SELECT id FROM weekly_invoices WHERE professional_id = $1 AND period_start = $2 AND period_end = $3",
+          const existing = await client.query<{
+            id: string;
+            total_cents: string;
+            status: string;
+            stripe_payment_intent_id: string | null;
+          }>(
+            `SELECT id, total_cents::text, status, stripe_payment_intent_id
+               FROM weekly_invoices
+              WHERE professional_id = $1 AND period_start = $2 AND period_end = $3
+              FOR UPDATE`,
             [account.professional_id, period.start, period.end],
           );
-          if (existing.rows[0]) return null;
+          const existingInvoice = existing.rows[0];
+          if (existingInvoice) {
+            if (existingInvoice.status === 'PENDIENTE_COBRO' && !existingInvoice.stripe_payment_intent_id) {
+              return { id: existingInvoice.id, total: Number(existingInvoice.total_cents) };
+            }
+            return null;
+          }
           const items = await client.query<{ id: string; amount_cents: string }>(
             `SELECT id, amount_cents::text FROM billable_items
               WHERE professional_id = $1 AND status = 'PENDIENTE' AND service_date >= $2 AND service_date < $3
@@ -213,8 +237,8 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
           const invoiceId = randomUUID();
           await client.query(
             `INSERT INTO weekly_invoices
-              (id, professional_id, period_start, period_end, total_cents, status, collection_requested_at)
-             VALUES ($1, $2, $3, $4, $5, 'PENDIENTE_COBRO', now())`,
+              (id, professional_id, period_start, period_end, total_cents, status)
+             VALUES ($1, $2, $3, $4, $5, 'PENDIENTE_COBRO')`,
             [invoiceId, account.professional_id, period.start, period.end, total],
           );
           await client.query(
@@ -237,15 +261,31 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
             metadata: { invoice_id: invoice.id, professional_id: account.professional_id },
           }, { idempotencyKey: `miconstructor-weekly-${invoice.id}` });
           await database.query(
-            "UPDATE weekly_invoices SET status = 'PROCESANDO', stripe_payment_intent_id = $2, updated_at = now() WHERE id = $1",
+            `UPDATE weekly_invoices
+                SET status = 'PROCESANDO', stripe_payment_intent_id = $2,
+                    collection_requested_at = now(), failure_reason = NULL, updated_at = now()
+              WHERE id = $1 AND status = 'PENDIENTE_COBRO'`,
             [invoice.id, intent.id],
           );
           created.push(invoice.id);
         } catch (error) {
-          await suspendForInvoiceFailure(database, invoice.id, error instanceof Error ? error.message : "Cobro rechazado");
+          const reason = error instanceof Error ? error.message : "Error temporal al iniciar el cobro";
+          await database.query(
+            `UPDATE weekly_invoices
+                SET failure_reason = $2, updated_at = now()
+              WHERE id = $1 AND status = 'PENDIENTE_COBRO'`,
+            [invoice.id, reason.slice(0, 500)],
+          );
+          await audit(database, {
+            action: "BILLING_COLLECTION_DEFERRED",
+            entityType: "invoice",
+            entityId: invoice.id,
+            metadata: { professionalId: account.professional_id, reason: reason.slice(0, 500) },
+          });
+          deferred.push(invoice.id);
         }
       }
-      response.json({ success: true, invoicesCreated: created.length });
+      response.json({ success: true, invoicesCreated: created.length, invoicesDeferred: deferred.length });
     } catch (error) { next(error); }
   });
 
@@ -263,12 +303,34 @@ export function stripeWebhookHandler(database: Database, config: AppConfig, stri
     } catch {
       return response.status(400).send("Firma no válida");
     }
-    const inserted = await database.query(
-      `INSERT INTO stripe_webhook_events (event_id, event_type) VALUES ($1, $2)
-       ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+
+    const claimed = await database.query(
+      `INSERT INTO stripe_webhook_events
+        (event_id, event_type, processing_started_at, attempts)
+       VALUES ($1, $2, now(), 1)
+       ON CONFLICT (event_id) DO UPDATE SET
+         event_type = EXCLUDED.event_type,
+         processing_started_at = now(),
+         processing_error = NULL,
+         attempts = stripe_webhook_events.attempts + 1
+       WHERE stripe_webhook_events.processed_at IS NULL
+         AND (stripe_webhook_events.processing_started_at IS NULL
+              OR stripe_webhook_events.processing_started_at < now() - interval '5 minutes')
+       RETURNING event_id`,
       [event.id, event.type],
     );
-    if (!inserted.rows[0]) return response.json({ received: true, duplicate: true });
+    if (!claimed.rows[0]) {
+      const state = await database.query<{ processed_at: Date | null; processing_started_at: Date | null }>(
+        "SELECT processed_at, processing_started_at FROM stripe_webhook_events WHERE event_id = $1",
+        [event.id],
+      );
+      return response.json({
+        received: true,
+        duplicate: Boolean(state.rows[0]?.processed_at),
+        inProgress: Boolean(!state.rows[0]?.processed_at && state.rows[0]?.processing_started_at),
+      });
+    }
+
     try {
       if (event.type === "setup_intent.succeeded") {
         const intent = event.data.object as Stripe.SetupIntent;
@@ -295,10 +357,20 @@ export function stripeWebhookHandler(database: Database, config: AppConfig, stri
           await suspendForInvoiceFailure(database, intent.metadata.invoice_id, intent.last_payment_error?.message ?? "Adeudo rechazado");
         }
       }
-      await database.query("UPDATE stripe_webhook_events SET processed_at = now() WHERE event_id = $1", [event.id]);
+      await database.query(
+        `UPDATE stripe_webhook_events
+            SET processed_at = now(), processing_started_at = NULL, processing_error = NULL
+          WHERE event_id = $1`,
+        [event.id],
+      );
       response.json({ received: true });
     } catch (error) {
-      await database.query("UPDATE stripe_webhook_events SET processing_error = $2 WHERE event_id = $1", [event.id, error instanceof Error ? error.message.slice(0, 500) : "Error"]);
+      await database.query(
+        `UPDATE stripe_webhook_events
+            SET processing_started_at = NULL, processing_error = $2
+          WHERE event_id = $1`,
+        [event.id, error instanceof Error ? error.message.slice(0, 500) : "Error"],
+      );
       response.status(500).send("Error procesando webhook");
     }
   };
