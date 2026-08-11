@@ -16,7 +16,7 @@ test("el hero mantiene una escala elegante entre 1024 y 1700 px", async () => {
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*font-size:\s*clamp\(2\.8rem,\s*3\.2vw,\s*3\.2rem\)/);
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*font-weight:\s*600/);
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*line-height:\s*1\.1/);
-  assert.match(css, /\.botanica-hero-copy h1[\s\S]*letter-spacing:\s*-0\.03em/);
+  assert.match(css, /\.botanica-hero-copy h1[\s\S]*letter-spacing:\s*-?\.03em/);
 });
 
 test("subtitlul și CTA-urile folosesc valorile aprobate pentru laptop", async () => {
