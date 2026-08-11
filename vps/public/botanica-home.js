@@ -17,6 +17,12 @@ function botanicaInitials(value) {
 function botanicaAnonymousNav() {
   if (!botanicaNav) return;
   if (botanicaNav.querySelector("#logout") || botanicaNav.querySelector('a[href="/panel"]')) return;
+  const ready = botanicaNav.querySelector('a[href="/#como-funciona"]')
+    && botanicaNav.querySelector('a[href="/#profesionales"]')
+    && botanicaNav.querySelector('a[href="/para-profesionales"]')
+    && botanicaNav.querySelector('a[href="/login"]')
+    && botanicaNav.querySelector('a[href="/registro-cliente"]');
+  if (ready) return;
   botanicaNav.innerHTML = `
     <a href="/#como-funciona">Cómo funciona</a>
     <a href="/#profesionales">Profesionales</a>
