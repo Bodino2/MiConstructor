@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { evaluateProfessionalAssessment, normalizeProfessionalSpecialty } from "../../../lib/professional-assessment.js";
+import {
+  evaluateProfessionalAssessment,
+  normalizeProfessionalSpecialty,
+} from "../../../lib/professional-assessment.js";
+import {
+  evaluateHomeServiceAssessment,
+  normalizeHomeServiceProfessionalSpecialty,
+} from "../../../lib/home-service-assessment.js";
 import { isValidSpanishTaxId } from "../../../lib/validation.js";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
@@ -38,6 +45,10 @@ const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1).max(128),
 });
+
+type RegistrationAssessment =
+  | ReturnType<typeof evaluateProfessionalAssessment>
+  | ReturnType<typeof evaluateHomeServiceAssessment>;
 
 function publicUser(row: Record<string, unknown>) {
   return {
@@ -76,16 +87,21 @@ export function authRouter(database: Database, config: AppConfig) {
       const taxId = input.taxId.toUpperCase().replace(/[\s-]/g, "");
       if (!isValidSpanishTaxId(taxId)) return response.status(400).json({ error: "NIF, NIE o CIF no válido." });
 
-      let assessment: ReturnType<typeof evaluateProfessionalAssessment> | null = null;
+      let assessment: RegistrationAssessment | null = null;
       if (input.role === "profesional") {
-        const specialty = normalizeProfessionalSpecialty(input.specialty);
+        const constructionSpecialty = normalizeProfessionalSpecialty(input.specialty);
+        const homeServiceSpecialty = normalizeHomeServiceProfessionalSpecialty(input.specialty);
+        const specialty = constructionSpecialty ?? homeServiceSpecialty;
         if (!input.companyName || !input.phone || !specialty) {
           return response.status(400).json({ error: "Empresa, teléfono y especialidad son obligatorios." });
         }
-        assessment = evaluateProfessionalAssessment({
+        const assessmentPayload = {
           ...(input.assessment && typeof input.assessment === "object" ? input.assessment : {}),
           especialidad: specialty,
-        });
+        };
+        assessment = constructionSpecialty
+          ? evaluateProfessionalAssessment(assessmentPayload)
+          : evaluateHomeServiceAssessment(assessmentPayload);
         if (!assessment.valid) return response.status(400).json({ error: assessment.error });
         if (!assessment.passed) {
           return response.status(422).json({ error: "Debes superar el test técnico de tu especialidad.", score: assessment.score, minimum: 80 });

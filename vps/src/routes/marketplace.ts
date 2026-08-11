@@ -9,10 +9,12 @@ import {
 } from "../../../lib/professional-assessment.js";
 import { estimateProjectPrice } from "../../../lib/project-estimator.js";
 import { calculateShortlistFee } from "../../../lib/shortlist-pricing.js";
+import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { withTransaction } from "../db.js";
 import { audit } from "../services/audit.js";
 import { requireAuth, requireRole } from "../services/auth.js";
+import { collectSelectionCharge, stripeClient, type ImmediateSelectionCharge } from "./billing.js";
 
 const projectSchema = z.object({
   title: z.string().trim().min(5).max(160),
@@ -32,7 +34,7 @@ const proposalSchema = z.object({
   message: z.string().trim().min(30).max(5000),
 });
 
-export function marketplaceRouter(database: Database) {
+export function marketplaceRouter(database: Database, config: AppConfig, stripe = stripeClient(config)) {
   const router = Router();
 
   router.get("/assessments", (_request, response) => {
@@ -263,40 +265,116 @@ export function marketplaceRouter(database: Database) {
       const projectId = z.string().uuid().safeParse(request.params.id);
       const professionalId = z.string().uuid().safeParse(request.body?.professionalId);
       if (!projectId.success || !professionalId.success) return response.status(400).json({ error: "Selección no válida." });
+
       const result = await withTransaction(database, async (client) => {
         const project = await client.query<{ owner_id: string; budget_cents: string; status: string }>(
           "SELECT owner_id, budget_cents, status FROM projects WHERE id = $1 FOR UPDATE",
           [projectId.data],
         );
         const row = project.rows[0];
-        if (!row || row.owner_id !== request.user!.id) return { status: 404, body: { error: "Proyecto no encontrado." } };
-        if (row.status !== "PUBLICADO") return { status: 409, body: { error: "El proyecto ya no admite selecciones." } };
+        if (!row || row.owner_id !== request.user!.id) {
+          return { status: 404, body: { error: "Proyecto no encontrado." }, charge: null as ImmediateSelectionCharge | null };
+        }
+        if (row.status !== "PUBLICADO") {
+          return { status: 409, body: { error: "El proyecto ya no admite selecciones." }, charge: null as ImmediateSelectionCharge | null };
+        }
 
-        const existing = await client.query<{ id: string; phone: string | null; email: string; name: string; company_name: string | null }>(
-          `SELECT s.id, u.phone, u.email, u.name, u.company_name
-             FROM shortlists s JOIN users u ON u.id = s.professional_id
+        const existing = await client.query<{
+          id: string;
+          phone: string | null;
+          email: string;
+          name: string;
+          company_name: string | null;
+          charge_id: string | null;
+          charge_amount: string | null;
+          charge_status: string | null;
+          retry_count: number | null;
+          stripe_customer_id: string | null;
+          stripe_payment_method_id: string | null;
+        }>(
+          `SELECT s.id, u.phone, u.email, u.name, u.company_name,
+                  bi.id AS charge_id, bi.amount_cents::text AS charge_amount,
+                  bi.status AS charge_status, bi.retry_count,
+                  b.stripe_customer_id, b.stripe_payment_method_id
+             FROM shortlists s
+             JOIN users u ON u.id = s.professional_id
+             JOIN billing_accounts b ON b.professional_id = s.professional_id
+             LEFT JOIN billable_items bi ON bi.shortlist_id = s.id
             WHERE s.project_id = $1 AND s.professional_id = $2`,
           [projectId.data, professionalId.data],
         );
-        if (existing.rows[0]) return { status: 200, body: { success: true, alreadySelected: true, contact: existing.rows[0] } };
+        const selected = existing.rows[0];
+        if (selected) {
+          const pendingCharge = selected.charge_id
+            && selected.charge_amount
+            && selected.charge_status === "PENDIENTE"
+            && selected.stripe_customer_id
+            && selected.stripe_payment_method_id
+            ? {
+                chargeId: selected.charge_id,
+                shortlistId: selected.id,
+                professionalId: professionalId.data,
+                amountCents: Number(selected.charge_amount),
+                stripeCustomerId: selected.stripe_customer_id,
+                stripePaymentMethodId: selected.stripe_payment_method_id,
+                attempt: selected.retry_count ?? 0,
+              } satisfies ImmediateSelectionCharge
+            : null;
+          return {
+            status: 200,
+            body: {
+              success: true,
+              alreadySelected: true,
+              contact: {
+                email: selected.email,
+                phone: selected.phone,
+                name: selected.name,
+                companyName: selected.company_name,
+              },
+            },
+            charge: pendingCharge,
+          };
+        }
 
-        const professional = await client.query<{ email: string; phone: string | null; name: string; company_name: string | null; billing_status: string; overdue: string }>(
+        const professional = await client.query<{
+          email: string;
+          phone: string | null;
+          name: string;
+          company_name: string | null;
+          billing_status: string;
+          overdue: string;
+          stripe_customer_id: string | null;
+          stripe_payment_method_id: string | null;
+        }>(
           `SELECT u.email, u.phone, u.name, u.company_name, b.status AS billing_status,
-                  b.overdue_balance_cents::text AS overdue
+                  b.overdue_balance_cents::text AS overdue,
+                  b.stripe_customer_id, b.stripe_payment_method_id
              FROM users u
              JOIN billing_accounts b ON b.professional_id = u.id
              JOIN proposals pr ON pr.professional_id = u.id AND pr.project_id = $2
-            WHERE u.id = $1 AND u.verification_status = 'APROBADO' AND pr.status = 'ENVIADA'`,
+            WHERE u.id = $1
+              AND u.role = 'profesional'
+              AND u.account_status = 'ACTIVO'
+              AND u.email_verified = true
+              AND u.verification_status = 'APROBADO'
+              AND pr.status = 'ENVIADA'`,
           [professionalId.data, projectId.data],
         );
         const pro = professional.rows[0];
-        if (!pro) return { status: 409, body: { error: "El profesional no está habilitado para este proyecto." } };
-        if (pro.billing_status !== "ACTIVO" || Number(pro.overdue) > 0) {
-          return { status: 402, body: { error: "El profesional no tiene una domiciliación activa." } };
+        if (!pro) {
+          return { status: 409, body: { error: "El profesional no está habilitado para este proyecto." }, charge: null as ImmediateSelectionCharge | null };
         }
+        if (pro.billing_status !== "ACTIVO" || Number(pro.overdue) > 0 || !pro.stripe_customer_id || !pro.stripe_payment_method_id) {
+          return { status: 402, body: { error: "El profesional no tiene una domiciliación activa." }, charge: null as ImmediateSelectionCharge | null };
+        }
+
         const fee = calculateShortlistFee(Number(row.budget_cents));
-        if (!fee.valid) return { status: 422, body: { error: "No se puede calcular la tarifa de selección." } };
+        if (!fee.valid) {
+          return { status: 422, body: { error: "No se puede calcular la tarifa de selección." }, charge: null as ImmediateSelectionCharge | null };
+        }
+
         const shortlistId = randomUUID();
+        const chargeId = randomUUID();
         const now = new Date();
         await client.query(
           `INSERT INTO shortlists
@@ -307,18 +385,46 @@ export function marketplaceRouter(database: Database) {
         );
         await client.query(
           `INSERT INTO billable_items
-            (id, professional_id, shortlist_id, description, amount_cents, service_date)
-           VALUES ($1, $2, $3, 'Contacto de proyecto desbloqueado', $4, $5)`,
-          [randomUUID(), professionalId.data, shortlistId, fee.feeCents, now],
+            (id, professional_id, shortlist_id, description, amount_cents, service_date, status)
+           VALUES ($1, $2, $3, 'Selección de profesional', $4, $5, 'PENDIENTE')`,
+          [chargeId, professionalId.data, shortlistId, fee.feeCents, now],
         );
         await client.query(
           `INSERT INTO conversations (id, project_id, client_id, professional_id, contact_unlocked_at)
-           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id, professional_id) DO NOTHING`,
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (project_id, professional_id) DO NOTHING`,
           [randomUUID(), projectId.data, request.user!.id, professionalId.data, now],
         );
-        await audit(client, { actorUserId: request.user!.id, action: "PROFESSIONAL_SHORTLISTED", entityType: "project", entityId: projectId.data, ip: request.ip, metadata: { professionalId: professionalId.data } });
-        return { status: 201, body: { success: true, contact: { email: pro.email, phone: pro.phone, name: pro.name, companyName: pro.company_name } } };
+        await audit(client, {
+          actorUserId: request.user!.id,
+          action: "PROFESSIONAL_SHORTLISTED",
+          entityType: "project",
+          entityId: projectId.data,
+          ip: request.ip,
+          metadata: { professionalId: professionalId.data, chargeMode: "IMMEDIATE_PER_SELECTION" },
+        });
+
+        return {
+          status: 201,
+          body: {
+            success: true,
+            contact: { email: pro.email, phone: pro.phone, name: pro.name, companyName: pro.company_name },
+          },
+          charge: {
+            chargeId,
+            shortlistId,
+            professionalId: professionalId.data,
+            amountCents: fee.feeCents,
+            stripeCustomerId: pro.stripe_customer_id,
+            stripePaymentMethodId: pro.stripe_payment_method_id,
+            attempt: 0,
+          } satisfies ImmediateSelectionCharge,
+        };
       });
+
+      if (result.charge) {
+        await collectSelectionCharge(database, stripe, result.charge);
+      }
       response.status(result.status).json(result.body);
     } catch (error) { next(error); }
   });

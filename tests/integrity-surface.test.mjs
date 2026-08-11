@@ -6,17 +6,14 @@ const shortlistRoute = new URL("../app/api/v1/proyectos/[id]/shortlist/route.ts"
 const quoteRoute = new URL("../app/api/v1/presupuestos/route.ts", import.meta.url);
 const contractRoute = new URL("../app/api/v1/proyectos/[id]/contrato/route.ts", import.meta.url);
 
-test("la shortlist D1 revalida proyecto, especialidad y propuesta", async () => {
+test("la shortlist D1 legacy queda cerrada tras migrar el cobro al flujo VPS", async () => {
   const source = await readFile(shortlistRoute, "utf8");
-  assert.match(source, /project\.status !== "PUBLICADO"/);
-  assert.doesNotMatch(source, /\["PUBLICADO", "EN_CURSO"\]/);
-  assert.match(source, /getSpecialtySlugForProjectCategory/);
-  assert.match(source, /professional_specialty_qualifications/);
-  assert.match(source, /specialty_slug = \?2/);
-  assert.match(source, /proposals[\s\S]*status = 'ENVIADA'/);
+  assert.match(source, /status: 410/);
+  assert.match(source, /IMMEDIATE_PER_SELECTION/);
+  assert.match(source, /legacyEndpoint: true/);
 });
 
-test("la respuesta de shortlist no divulga la tarifa que revela el porcentaje interno", async () => {
+test("la respuesta legacy de shortlist no divulga la tarifa interna", async () => {
   const source = await readFile(shortlistRoute, "utf8");
   assert.doesNotMatch(source, /tarifaCentimos\s*:/);
   assert.doesNotMatch(source, /porcentaje\s*:/i);

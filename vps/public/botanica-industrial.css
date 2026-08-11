@@ -1,0 +1,396 @@
+:root {
+  --mc-bg: #EAEAEA;
+  --mc-surface: #FFFFFF;
+  --mc-obsidian: #1A1D20;
+  --mc-anthracite: #3A3A3A;
+  --mc-accent: #00A36C;
+  --mc-action: #008758;
+  --mc-action-hover: #006F49;
+  --mc-text: #1A1D20;
+  --mc-muted: #555555;
+  --mc-border: #D0D0D0;
+  --mc-soft: #F5F5F3;
+  --mc-success-soft: #E9F7F1;
+  --mc-danger: #9C332B;
+  --mc-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+  --mc-shadow-lg: 0 22px 55px rgba(0, 0, 0, 0.10);
+  --ink: var(--mc-text);
+  --muted: var(--mc-muted);
+  --line: var(--mc-border);
+  --paper: var(--mc-bg);
+  --card: var(--mc-surface);
+  --orange: var(--mc-action);
+  --orange-dark: var(--mc-action-hover);
+  --teal: var(--mc-accent);
+  --danger: var(--mc-danger);
+  --shadow: var(--mc-shadow);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background:
+    radial-gradient(circle at 8% 3%, rgba(255,255,255,.9), transparent 30rem),
+    linear-gradient(135deg, rgba(255,255,255,.33) 0 1px, transparent 1px 15px),
+    var(--mc-bg);
+  color: var(--mc-text);
+}
+
+body, button, input, textarea, select {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.topbar {
+  min-height: 72px;
+  height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: rgba(26, 29, 32, .98);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 8px 28px rgba(0,0,0,.12);
+}
+
+.brand { color: #fff; }
+.brand img { opacity: 1; }
+.brand span { color: #fff; }
+
+.topbar nav { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar nav a,
+.topbar nav button {
+  color: rgba(255,255,255,.88);
+  transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+.topbar nav a:hover,
+.topbar nav button:hover {
+  color: #fff;
+  background: rgba(255,255,255,.07);
+}
+.topbar nav .primary {
+  background: var(--mc-action);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0,135,88,.18);
+}
+.topbar nav .primary:hover { background: var(--mc-action-hover); transform: translateY(-1px); }
+
+.button {
+  min-height: 44px;
+  border-color: var(--mc-anthracite);
+  background: var(--mc-surface);
+  color: var(--mc-text);
+  box-shadow: none;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+}
+.button:hover { transform: translateY(-1px); box-shadow: var(--mc-shadow); }
+.button.primary {
+  border-color: var(--mc-action);
+  background: var(--mc-action);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0,135,88,.16);
+}
+.button.primary:hover { background: var(--mc-action-hover); border-color: var(--mc-action-hover); transform: translateY(-1px) scale(1.012); }
+.button:focus-visible,
+.topbar a:focus-visible,
+.topbar button:focus-visible,
+.cookie-banner a:focus-visible,
+.cookie-banner button:focus-visible,
+.support-launcher:focus-visible,
+.support-close:focus-visible {
+  outline: 3px solid rgba(0,163,108,.34);
+  outline-offset: 3px;
+}
+
+.card,
+.list-item,
+.question,
+.admin-kpi,
+.portal-choice-card,
+.professional-value-card {
+  background: var(--mc-surface);
+  border-color: var(--mc-border);
+  box-shadow: var(--mc-shadow);
+}
+
+input, textarea, select {
+  border-color: #BFC3C5;
+  background: #fff;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--mc-accent);
+  outline: 3px solid rgba(0,163,108,.14);
+}
+
+.eyebrow { color: var(--mc-action); }
+.status { background: var(--mc-success-soft); color: #006A47; }
+.notice { border-color: var(--mc-accent); background: var(--mc-success-soft); color: #195947; }
+.tabs button.active { background: var(--mc-obsidian); border-color: var(--mc-obsidian); }
+
+/* Botanica Industrial landing */
+.botanica-home {
+  width: 100%;
+  overflow: hidden;
+}
+.botanica-hero {
+  width: min(1240px, calc(100% - 36px));
+  margin: 0 auto;
+  padding: 34px 0 22px;
+  display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(430px, 1.08fr);
+  gap: 42px;
+  align-items: center;
+}
+.botanica-hero-copy { padding: 34px 0; }
+.botanica-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--mc-action);
+}
+.botanica-kicker::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: var(--mc-accent);
+}
+.botanica-hero h1 {
+  margin: 16px 0 18px;
+  max-width: 690px;
+  font-size: clamp(46px, 5.8vw, 76px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+.botanica-hero h1 em { color: var(--mc-action); font-style: normal; }
+.botanica-hero .lead { max-width: 640px; font-size: 18px; line-height: 1.62; color: var(--mc-muted); }
+.botanica-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 26px 0 22px; }
+.botanica-proof-row { display: flex; flex-wrap: wrap; gap: 10px 22px; color: #465055; font-size: 13px; font-weight: 720; }
+.botanica-proof-row span { display: inline-flex; align-items: center; gap: 7px; }
+.botanica-proof-dot { width: 18px; height: 18px; border: 1px solid rgba(0,163,108,.35); border-radius: 50%; display: inline-grid; place-items: center; color: var(--mc-action); font-size: 11px; }
+
+.botanica-hero-visual { position: relative; min-height: 430px; }
+.botanica-hero-visual img {
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+  object-fit: cover;
+  display: block;
+  border-radius: 24px;
+  box-shadow: var(--mc-shadow-lg);
+}
+.botanica-verified-card {
+  position: absolute;
+  right: 20px;
+  bottom: 24px;
+  width: min(285px, calc(100% - 40px));
+  padding: 16px 18px;
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(208,208,208,.9);
+  border-radius: 14px;
+  box-shadow: var(--mc-shadow-lg);
+  backdrop-filter: blur(12px);
+}
+.botanica-verified-card strong { display: block; font-size: 16px; }
+.botanica-verified-card span { display: block; margin-top: 5px; color: var(--mc-muted); font-size: 12px; line-height: 1.45; }
+.botanica-verified-icon { float: left; width: 38px; height: 38px; margin: 0 12px 10px 0; border-radius: 50%; background: var(--mc-success-soft); display: grid; place-items: center; color: var(--mc-action); font-size: 20px; }
+
+.botanica-audiences {
+  width: min(1240px, calc(100% - 36px));
+  margin: 14px auto 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 18px;
+}
+.botanica-audience-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: start;
+  padding: 24px;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 16px;
+  box-shadow: var(--mc-shadow);
+}
+.botanica-audience-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0,163,108,.24);
+  border-radius: 50%;
+  color: var(--mc-action);
+  background: #fff;
+  font-size: 23px;
+}
+.botanica-audience-card h2 { margin: 2px 0 7px; font-size: 24px; }
+.botanica-audience-card p { margin-bottom: 16px; color: var(--mc-muted); line-height: 1.55; }
+
+.botanica-section {
+  width: min(1240px, calc(100% - 36px));
+  margin: 0 auto;
+  padding: 48px 0;
+}
+.botanica-section-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 22px; }
+.botanica-section-head h2 { margin: 0; font-size: clamp(30px, 3.8vw, 44px); }
+.botanica-section-head p { margin: 6px 0 0; color: var(--mc-muted); max-width: 640px; line-height: 1.55; }
+.botanica-section-link { color: var(--mc-action); font-weight: 850; text-decoration: none; white-space: nowrap; }
+
+.botanica-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 16px;
+}
+.botanica-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 15px;
+  padding: 22px;
+  border: 1px solid var(--mc-border);
+  background: rgba(255,255,255,.83);
+  border-radius: 16px;
+}
+.botanica-step-number { color: var(--mc-accent); font-size: 54px; font-weight: 900; line-height: .9; letter-spacing: -.05em; }
+.botanica-step h3 { margin: 0 0 6px; font-size: 18px; }
+.botanica-step p { margin: 0; color: var(--mc-muted); line-height: 1.52; font-size: 14px; }
+
+.botanica-professionals { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; }
+.botanica-prof-card {
+  min-width: 0;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--mc-border);
+  border-radius: 14px;
+  box-shadow: 0 7px 18px rgba(0,0,0,.045);
+}
+.botanica-prof-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.botanica-prof-avatar { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; background: var(--mc-obsidian); color: #fff; font-weight: 900; }
+.botanica-prof-card:nth-child(4n) .botanica-prof-avatar { background: var(--mc-action); }
+.botanica-prof-card h3 { margin: 0; font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
+.botanica-prof-location { color: var(--mc-muted); font-size: 12px; margin-top: 3px; }
+.botanica-rating { color: var(--mc-action); font-size: 13px; font-weight: 900; }
+.botanica-prof-meta { color: var(--mc-muted); font-size: 12px; line-height: 1.48; min-height: 36px; margin: 8px 0 12px; }
+.botanica-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.botanica-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 3px 7px; border-radius: 999px; background: var(--mc-success-soft); color: #006A47; font-size: 10px; font-weight: 900; }
+.botanica-prof-empty { grid-column: 1 / -1; padding: 28px; text-align: center; background: #fff; border: 1px dashed #AEB5B7; border-radius: 14px; color: var(--mc-muted); }
+
+.botanica-trust-band {
+  background: var(--mc-obsidian);
+  color: #fff;
+  margin-top: 8px;
+}
+.botanica-trust-inner {
+  width: min(1240px, calc(100% - 36px));
+  margin: 0 auto;
+  padding: 28px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 0;
+}
+.botanica-trust-item { padding: 8px 24px; border-right: 1px solid rgba(255,255,255,.13); }
+.botanica-trust-item:last-child { border-right: 0; }
+.botanica-trust-item strong { display: block; margin-bottom: 5px; }
+.botanica-trust-item span { color: rgba(255,255,255,.7); line-height: 1.45; font-size: 13px; }
+.botanica-trust-item i { color: var(--mc-accent); font-style: normal; margin-right: 7px; }
+
+/* Portals / forms */
+.portal-shell,
+.auth-wrap,
+.dashboard,
+.legal-shell { color: var(--mc-text); }
+.portal-choice-card,
+.professional-value-card { border-top-color: var(--mc-accent) !important; }
+.professional-choice,
+.professional-value-card { background: linear-gradient(145deg, #fff 0%, #F2F8F5 100%) !important; }
+.portal-badge { background: var(--mc-success-soft); color: #006A47; }
+.professional-steps strong { background: var(--mc-action) !important; }
+.professional-benefits article { border-left-color: var(--mc-accent) !important; background: rgba(255,255,255,.78) !important; }
+
+/* Dashboards */
+.dashboard { width: min(1320px, calc(100% - 32px)); }
+.dashboard-head { padding: 10px 0 4px; }
+.dashboard-grid { grid-template-columns: 300px minmax(0,1fr); }
+.sidebar { border-top: 4px solid var(--mc-accent); }
+.metric { border-color: var(--mc-border); }
+.admin-meta-grid, .audit-item pre { background: #F3F4F3; }
+
+/* Footer */
+.site-footer {
+  margin-top: 0;
+  background: var(--mc-obsidian) !important;
+  border-top-color: rgba(255,255,255,.08) !important;
+  color: #fff;
+}
+.site-footer p, .site-footer-bottom { color: rgba(255,255,255,.67) !important; }
+.site-footer a { color: rgba(255,255,255,.92) !important; }
+.site-footer .button { border-color: rgba(255,255,255,.34); background: transparent; color: #fff; }
+.site-footer-bottom { border-top-color: rgba(255,255,255,.12) !important; }
+
+/* Compact cookie consent: fixes hidden override and laptop footprint */
+.cookie-settings[hidden] { display: none !important; }
+.cookie-banner {
+  left: 18px !important;
+  right: auto !important;
+  bottom: 18px !important;
+  width: min(500px, calc(100vw - 36px)) !important;
+  max-width: 500px !important;
+  margin: 0 !important;
+  padding: 14px 15px !important;
+  border-radius: 13px !important;
+  border-color: var(--mc-border) !important;
+  box-shadow: var(--mc-shadow-lg) !important;
+}
+.cookie-banner h3 { font-size: 16px; margin: 0 0 5px !important; }
+.cookie-banner p { font-size: 12px; line-height: 1.45 !important; margin-bottom: 10px !important; }
+.cookie-actions { gap: 7px !important; }
+.cookie-actions .button { min-height: 34px; padding: 7px 10px; font-size: 11px; border-radius: 8px; }
+.cookie-setting { font-size: 12px; }
+.cookie-setting small { color: var(--mc-muted); }
+
+.support-launcher { background: var(--mc-action) !important; }
+.support-launcher:hover { background: var(--mc-action-hover) !important; }
+
+@media (max-width: 1120px) {
+  .botanica-professionals { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .botanica-trust-inner { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .botanica-trust-item:nth-child(2) { border-right: 0; }
+  .botanica-trust-item:nth-child(-n+2) { border-bottom: 1px solid rgba(255,255,255,.13); padding-bottom: 18px; margin-bottom: 10px; }
+}
+
+@media (max-width: 900px) {
+  .topbar { align-items: flex-start; }
+  .topbar nav { max-width: 70%; }
+  .botanica-hero { grid-template-columns: 1fr; gap: 16px; padding-top: 20px; }
+  .botanica-hero-copy { padding: 10px 0; }
+  .botanica-hero-visual { min-height: 340px; }
+  .botanica-hero-visual img { min-height: 340px; }
+  .botanica-audiences, .botanica-steps { grid-template-columns: 1fr; }
+  .botanica-professionals { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .dashboard-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .topbar { min-height: 64px; align-items: center; padding: 9px 14px; }
+  .brand img { width: 34px; height: 34px; }
+  .topbar nav { max-width: none; gap: 3px; }
+  .topbar nav a:not(.primary):not([href="/login"]), .topbar nav button:not(#logout) { display: none; }
+  .botanica-hero,
+  .botanica-audiences,
+  .botanica-section,
+  .botanica-trust-inner { width: min(100% - 24px, 1240px); }
+  .botanica-hero h1 { font-size: clamp(40px, 12vw, 56px); }
+  .botanica-hero-actions { flex-direction: column; align-items: stretch; }
+  .botanica-hero-actions .button { width: 100%; }
+  .botanica-proof-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .botanica-hero-visual, .botanica-hero-visual img { min-height: 280px; }
+  .botanica-audiences { grid-template-columns: 1fr; }
+  .botanica-audience-card { grid-template-columns: 1fr; }
+  .botanica-section { padding: 36px 0; }
+  .botanica-section-head { align-items: flex-start; flex-direction: column; }
+  .botanica-professionals { grid-template-columns: 1fr; }
+  .botanica-trust-inner { grid-template-columns: 1fr; }
+  .botanica-trust-item { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.13); padding: 16px 4px; margin: 0 !important; }
+  .botanica-trust-item:last-child { border-bottom: 0; }
+  .cookie-banner { left: 10px !important; bottom: 10px !important; width: calc(100vw - 20px) !important; max-height: 68vh; overflow: auto; }
+  .cookie-actions .button { flex: 1 1 120px !important; }
+}

@@ -42,20 +42,21 @@ test("sesionesle actualizează last_seen atomic și nu pornesc query-uri neobser
   assert.match(auth, /accountStatus !== "ACTIVO"/);
 });
 
-test("billing reia facturi și webhook-uri întrerupte fără suspendare falsă", async () => {
+test("cobro inmediato conserva reintentos idempotentes y webhooks recuperables", async () => {
   const [billing, migration] = await Promise.all([
     readFile(billingPath, "utf8"),
     readFile(new URL("006_billing_reliability.sql", migrationsDir), "utf8"),
   ]);
   assert.match(migration, /processing_started_at/);
   assert.match(migration, /attempts integer/);
-  assert.match(billing, /existingInvoice\.status === 'PENDIENTE_COBRO'/);
-  assert.match(billing, /BILLING_COLLECTION_DEFERRED/);
+  assert.match(billing, /miconstructor-selection-\$\{charge\.chargeId\}-attempt-\$\{attempt\}/);
+  assert.match(billing, /retry_count = \$2/);
   assert.match(billing, /stripe_webhook_events\.attempts \+ 1/);
   assert.match(billing, /processing_started_at = NULL, processing_error = \$2/);
+  assert.match(billing, /miconstructor_professional_verification_ready/);
   assert.doesNotMatch(
     billing,
-    /suspendForInvoiceFailure[\s\S]{0,2500}UPDATE users SET verification_status = 'SUSPENDIDO'/,
+    /syncBillingAccountState[\s\S]{0,1800}SET verification_status = 'SUSPENDIDO'/,
   );
 });
 
@@ -63,5 +64,7 @@ test("conflictele de integritate sunt expuse ca 409, nu ca eroare internă gener
   const app = await readFile(appPath, "utf8");
   assert.match(app, /shortlist_professional_not_eligible/);
   assert.match(app, /contract_shortlist_required/);
+  assert.match(app, /home_service_private_address_required/);
+  assert.match(app, /professional_schedule_capacity_exceeded/);
   assert.match(app, /response\.status\(409\)/);
 });
