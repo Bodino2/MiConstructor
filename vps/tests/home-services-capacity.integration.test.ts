@@ -88,6 +88,14 @@ async function publish(client: Agent) {
   return result.body.request.id as string;
 }
 
+async function setPrivateAddress(client: Agent, requestId: string, suffix: string) {
+  const result = await client.put(`/api/v1/home-services/requests/${requestId}/private-details`).send({
+    serviceAddress: `Calle Capacidad ${suffix}, 23700 Linares`,
+    accessNotes: "Llamar al llegar.",
+  });
+  assert.equal(result.status, 200, result.text);
+}
+
 async function makeOffer(professional: Agent, requestId: string) {
   const result = await professional.post(`/api/v1/home-services/requests/${requestId}/offers`).send({
     amountCentsPerVisit: 6000,
@@ -106,6 +114,8 @@ test("la base de datos bloquea solapes por capacidad y hace rollback de la acept
 
   const firstRequest = await publish(firstClient);
   const secondRequest = await publish(secondClient);
+  await setPrivateAddress(firstClient, firstRequest, "10");
+  await setPrivateAddress(secondClient, secondRequest, "20");
   const firstOffer = await makeOffer(professional.agent, firstRequest);
   const secondOffer = await makeOffer(professional.agent, secondRequest);
 
