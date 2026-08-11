@@ -247,16 +247,16 @@ export default function PublicLanding() {
                 <span className="public-kicker dark"><i /> PAGO SOLO POR CONTACTO CUALIFICADO</span>
                 <h2>Gratis hasta entrar<br/>en la shortlist.</h2>
               </div>
-              <p>La tarifa de shortlist se calcula internamente según el valor estimado del proyecto. Las selecciones se agrupan en una factura semanal y se cobran por domiciliación bancaria obligatoria.</p>
+              <p>La tarifa de shortlist se calcula internamente según el valor estimado del proyecto. Solo paga el profesional seleccionado y el adeudo se inicia automáticamente en el momento de la selección mediante la domiciliación autorizada.</p>
             </div>
             <div className="public-shortlist-flow">
               <article><b>01</b><span>Registro y proyectos</span><strong>0 €</strong><p>Crear el perfil, superar la verificación y consultar oportunidades no tiene coste.</p></article>
-              <article><b>02</b><span>Selección del cliente</span><strong>Tarifa conocida</strong><p>El profesional recibe el importe aplicable a ese contacto dentro de su panel.</p></article>
-              <article><b>03</b><span>Facturación profesional</span><strong>Cierre semanal</strong><p>Las selecciones se agrupan y cobran mediante domiciliación bancaria.</p></article>
+              <article><b>02</b><span>Selección del cliente</span><strong>Cobro único</strong><p>Solo el profesional seleccionado genera el cargo correspondiente a ese contacto cualificado.</p></article>
+              <article><b>03</b><span>Cobro profesional</span><strong>Automático</strong><p>El adeudo se inicia al ser seleccionado, sin agrupar nuevas selecciones en facturas semanales.</p></article>
             </div>
-            <div className="public-pricing-examples" aria-label="Ejemplos de tarifas de shortlist">
+            <div className="public-pricing-examples" aria-label="Condiciones del modelo shortlist">
               <span><small>ALTA Y CONSULTA</small><strong>Sin coste</strong></span>
-              <span><small>COBRO DE SELECCIONES</small><strong>Semanal</strong></span>
+              <span><small>COBRO DE SELECCIÓN</small><strong>Al ser seleccionado</strong></span>
               <span><small>MÉTODO OBLIGATORIO</small><strong>Domiciliación</strong></span>
               <em>Un impago suspende la cuenta profesional hasta liquidar íntegramente el saldo pendiente.</em>
             </div>
