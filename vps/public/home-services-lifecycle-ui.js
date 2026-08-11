@@ -39,15 +39,40 @@ function hardenRequestPrivacyCopy() {
   if (notes) notes.placeholder = "Describe tareas y prioridades. No incluyas teléfono, email, dirección exacta, llaves ni códigos de acceso.";
 }
 
+function privateDetailsForm(requestId) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "hsl-private-details-form";
+  wrapper.dataset.hslPrivateForm = requestId;
+  wrapper.innerHTML = `<strong>Datos privados para ejecutar el servicio</strong><p>La dirección exacta y el acceso no se muestran a profesionales antes de contratar.</p><div class="hsl-private-grid"><label>Dirección exacta<input data-hsl-address="${hslEscape(requestId)}" maxlength="300" autocomplete="street-address" placeholder="Calle, número, piso/puerta" /></label><label>Acceso (opcional)<input data-hsl-access="${hslEscape(requestId)}" maxlength="1000" placeholder="Portería, indicaciones de llegada; evita contraseñas permanentes" /></label><button class="button" type="button" data-hsl-save-private="${hslEscape(requestId)}">Guardar datos privados</button></div>`;
+  wrapper.querySelector("[data-hsl-save-private]")?.addEventListener("click", async (event) => {
+    const id = event.currentTarget.dataset.hslSavePrivate;
+    const serviceAddress = wrapper.querySelector(`[data-hsl-address="${CSS.escape(id)}"]`)?.value.trim();
+    const accessNotes = wrapper.querySelector(`[data-hsl-access="${CSS.escape(id)}"]`)?.value.trim() || "";
+    if (!serviceAddress || serviceAddress.length < 5) return hslNotify("Indica la dirección exacta antes de contratar.", true);
+    try {
+      await hslApi(`/api/v1/home-services/requests/${encodeURIComponent(id)}/private-details`, { method: "PUT", body: JSON.stringify({ serviceAddress, accessNotes }) });
+      hslNotify("Dirección privada guardada.");
+      wrapper.classList.add("hsl-private-saved");
+      const strong = wrapper.querySelector("strong");
+      if (strong) strong.textContent = "✓ Datos privados guardados";
+    } catch (error) { hslNotify(error.message, true); }
+  });
+  return wrapper;
+}
+
 async function addClientWithdrawal() {
   const me = await hslApi("/api/v1/auth/me").catch(() => ({ user: null }));
   if (me.user?.role !== "cliente") return;
   document.querySelectorAll("[data-hs-offers]").forEach((offersButton) => {
+    const requestId = offersButton.dataset.hsOffers;
+    if (!offersButton.parentElement?.querySelector(`[data-hsl-private-form="${CSS.escape(requestId)}"]`)) {
+      offersButton.insertAdjacentElement("beforebegin", privateDetailsForm(requestId));
+    }
     if (offersButton.parentElement?.querySelector("[data-hsl-cancel-request]")) return;
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "button danger-button";
-    cancel.dataset.hslCancelRequest = offersButton.dataset.hsOffers;
+    cancel.dataset.hslCancelRequest = requestId;
     cancel.textContent = "Retirar solicitud";
     offersButton.insertAdjacentElement("afterend", cancel);
     cancel.addEventListener("click", async () => {
@@ -58,6 +83,23 @@ async function addClientWithdrawal() {
       } catch (error) { hslNotify(error.message, true); }
     });
   });
+}
+
+async function addPrivateExecutionDetails() {
+  const shell = document.querySelector(".hs-shell");
+  if (!shell || shell.querySelector("#hsl-private-execution")) return;
+  const me = await hslApi("/api/v1/auth/me").catch(() => ({ user: null }));
+  if (!me.user) return;
+  try {
+    const result = await hslApi("/api/v1/home-services/engagements/private-details");
+    const visible = (result.privateDetails || []).filter((item) => item.serviceAddress && !["CANCELADO"].includes(item.status));
+    if (!visible.length) return;
+    const section = document.createElement("section");
+    section.className = "hs-section";
+    section.id = "hsl-private-execution";
+    section.innerHTML = `<div class="hs-section-head"><h2>Detalles privados de ejecución</h2></div><div class="hs-requests">${visible.map((item) => `<article class="card hs-request-item hsl-private-card"><div class="hs-engagement-head"><div><span class="eyebrow">ACCESO PRIVADO</span><h3>${hslEscape(item.zone)}</h3></div><span class="hs-status">${hslEscape(item.status)}</span></div><p><strong>Dirección:</strong> ${hslEscape(item.serviceAddress)}</p>${item.accessNotes ? `<p><strong>Indicaciones:</strong> ${hslEscape(item.accessNotes)}</p>` : ""}<small>Visible únicamente para las partes asignadas y administración.</small></article>`).join("")}</div>`;
+    shell.append(section);
+  } catch (error) { hslNotify(error.message, true); }
 }
 
 async function addProfessionalOffers() {
@@ -86,7 +128,7 @@ async function addProfessionalOffers() {
 async function enhanceHomeServicesLifecycle() {
   if (location.pathname !== "/servicios-hogar") return;
   hardenRequestPrivacyCopy();
-  await Promise.all([addClientWithdrawal(), addProfessionalOffers()]);
+  await Promise.all([addClientWithdrawal(), addProfessionalOffers(), addPrivateExecutionDetails()]);
 }
 
 const hslObserver = new MutationObserver(() => {
