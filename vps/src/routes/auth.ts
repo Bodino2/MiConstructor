@@ -54,12 +54,14 @@ function publicUser(row: Record<string, unknown>) {
 async function createEmailToken(database: Database, config: AppConfig, userId: string, type: "VERIFY_EMAIL" | "RESET_PASSWORD") {
   const token = createOpaqueToken();
   const tokenHash = hashOpaqueToken(token, config.TOKEN_PEPPER);
-  await database.query("DELETE FROM auth_tokens WHERE user_id = $1 AND type = $2 AND consumed_at IS NULL", [userId, type]);
-  await database.query(
-    `INSERT INTO auth_tokens (token_hash, user_id, type, expires_at)
-     VALUES ($1, $2, $3, now() + CASE WHEN $3 = 'VERIFY_EMAIL' THEN interval '24 hours' ELSE interval '1 hour' END)`,
-    [tokenHash, userId, type],
-  );
+  await withTransaction(database, async (client) => {
+    await client.query("DELETE FROM auth_tokens WHERE user_id = $1 AND type = $2 AND consumed_at IS NULL", [userId, type]);
+    await client.query(
+      `INSERT INTO auth_tokens (token_hash, user_id, type, expires_at)
+       VALUES ($1, $2, $3, now() + CASE WHEN $3 = 'VERIFY_EMAIL' THEN interval '24 hours' ELSE interval '1 hour' END)`,
+      [tokenHash, userId, type],
+    );
+  });
   return token;
 }
 
@@ -149,16 +151,20 @@ export function authRouter(database: Database, config: AppConfig) {
       const token = z.string().min(32).safeParse(request.body?.token);
       if (!token.success) return response.status(400).json({ error: "Token no válido." });
       const tokenHash = hashOpaqueToken(token.data, config.TOKEN_PEPPER);
-      const result = await database.query<{ user_id: string }>(
-        `UPDATE auth_tokens
-            SET consumed_at = now()
-          WHERE token_hash = $1 AND type = 'VERIFY_EMAIL' AND consumed_at IS NULL AND expires_at > now()
-          RETURNING user_id`,
-        [tokenHash],
-      );
-      const row = result.rows[0];
-      if (!row) return response.status(400).json({ error: "El enlace ha caducado o ya fue utilizado." });
-      await database.query("UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1", [row.user_id]);
+      const verified = await withTransaction(database, async (client) => {
+        const result = await client.query<{ user_id: string }>(
+          `UPDATE auth_tokens
+              SET consumed_at = now()
+            WHERE token_hash = $1 AND type = 'VERIFY_EMAIL' AND consumed_at IS NULL AND expires_at > now()
+            RETURNING user_id`,
+          [tokenHash],
+        );
+        const row = result.rows[0];
+        if (!row) return false;
+        await client.query("UPDATE users SET email_verified = true, updated_at = now() WHERE id = $1", [row.user_id]);
+        return true;
+      });
+      if (!verified) return response.status(400).json({ error: "El enlace ha caducado o ya fue utilizado." });
       return response.json({ success: true });
     } catch (error) { next(error); }
   });
@@ -188,7 +194,7 @@ export function authRouter(database: Database, config: AppConfig) {
         return response.status(401).json({ error: "Email o contraseña incorrectos." });
       }
       if (!row.email_verified) return response.status(403).json({ error: "Debes verificar tu email antes de entrar." });
-      if (row.account_status === "SUSPENDIDO") return response.status(423).json({ error: "La cuenta está suspendida." });
+      if (row.account_status !== "ACTIVO") return response.status(423).json({ error: "La cuenta no está activa." });
       await database.query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1", [row.id]);
       const token = await createSession(database, config, String(row.id), request);
       setSessionCookie(response, config, token);
@@ -234,18 +240,21 @@ export function authRouter(database: Database, config: AppConfig) {
       const parsed = z.object({ token: z.string().min(32), password: passwordRule }).safeParse(request.body);
       if (!parsed.success) return response.status(400).json({ error: parsed.error.issues[0]?.message });
       const tokenHash = hashOpaqueToken(parsed.data.token, config.TOKEN_PEPPER);
-      const token = await database.query<{ user_id: string }>(
-        `UPDATE auth_tokens SET consumed_at = now()
-          WHERE token_hash = $1 AND type = 'RESET_PASSWORD' AND consumed_at IS NULL AND expires_at > now()
-          RETURNING user_id`,
-        [tokenHash],
-      );
-      if (!token.rows[0]) return response.status(400).json({ error: "El enlace ha caducado o ya fue utilizado." });
       const passwordHash = await hashPassword(parsed.data.password, config.SESSION_PEPPER);
-      await withTransaction(database, async (client) => {
-        await client.query("UPDATE users SET password_hash = $1, failed_login_attempts = 0, locked_until = NULL, updated_at = now() WHERE id = $2", [passwordHash, token.rows[0]!.user_id]);
-        await client.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1", [token.rows[0]!.user_id]);
+      const reset = await withTransaction(database, async (client) => {
+        const token = await client.query<{ user_id: string }>(
+          `UPDATE auth_tokens SET consumed_at = now()
+            WHERE token_hash = $1 AND type = 'RESET_PASSWORD' AND consumed_at IS NULL AND expires_at > now()
+            RETURNING user_id`,
+          [tokenHash],
+        );
+        const row = token.rows[0];
+        if (!row) return false;
+        await client.query("UPDATE users SET password_hash = $1, failed_login_attempts = 0, locked_until = NULL, updated_at = now() WHERE id = $2", [passwordHash, row.user_id]);
+        await client.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1", [row.user_id]);
+        return true;
       });
+      if (!reset) return response.status(400).json({ error: "El enlace ha caducado o ya fue utilizado." });
       response.json({ success: true });
     } catch (error) { next(error); }
   });
