@@ -87,11 +87,18 @@ export function authentication(database: Database, config: AppConfig) {
         account_status: string;
         verification_status: string;
       }>(
-        `SELECT u.id, u.email, u.name, u.role, u.email_verified,
+        `WITH active_session AS (
+           UPDATE auth_sessions
+              SET last_seen_at = now()
+            WHERE token_hash = $1
+              AND revoked_at IS NULL
+              AND expires_at > now()
+            RETURNING user_id
+         )
+         SELECT u.id, u.email, u.name, u.role, u.email_verified,
                 u.account_status, u.verification_status
-           FROM auth_sessions s
-           JOIN users u ON u.id = s.user_id
-          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+           FROM active_session s
+           JOIN users u ON u.id = s.user_id`,
         [tokenHash],
       );
       const row = result.rows[0];
@@ -106,7 +113,6 @@ export function authentication(database: Database, config: AppConfig) {
           verificationStatus: row.verification_status,
         };
         request.sessionTokenHash = tokenHash;
-        void database.query("UPDATE auth_sessions SET last_seen_at = now() WHERE token_hash = $1", [tokenHash]);
       }
       next();
     } catch (error) {
