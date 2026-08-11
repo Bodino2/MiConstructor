@@ -9,6 +9,8 @@ const indexUrl = new URL("../public/index.html", import.meta.url);
 const billingRouteUrl = new URL("../src/routes/billing.ts", import.meta.url);
 const marketplaceRouteUrl = new URL("../src/routes/marketplace.ts", import.meta.url);
 const migrationUrl = new URL("../migrations/006_immediate_selection_billing.sql", import.meta.url);
+const legacyWeeklyUrl = new URL("../../app/api/v1/facturacion/semanal/route.ts", import.meta.url);
+const legacyShortlistUrl = new URL("../../app/api/v1/proyectos/[id]/shortlist/route.ts", import.meta.url);
 
 test("el adaptador web de cobro por selección es JavaScript válido y carga antes de app.js", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(adapterUrl)], { stdio: "pipe" });
@@ -37,6 +39,19 @@ test("backend inicia el cobro al seleccionar y el job semanal queda desactivado"
   assert.match(billing, /selection_charge_id/);
   assert.doesNotMatch(billing, /previousWeeklyPeriod/);
   assert.doesNotMatch(billing, /miconstructor-weekly-/);
+});
+
+test("los endpoints Next heredados no pueden reactivar shortlist o facturación semanal", async () => {
+  const [weekly, shortlist] = await Promise.all([
+    readFile(legacyWeeklyUrl, "utf8"),
+    readFile(legacyShortlistUrl, "utf8"),
+  ]);
+  assert.match(weekly, /status:\s*410/);
+  assert.match(weekly, /IMMEDIATE_PER_SELECTION/);
+  assert.doesNotMatch(weekly, /previousWeeklyPeriod|weekly_invoices|professional_billable_items/);
+  assert.match(shortlist, /status:\s*410/);
+  assert.match(shortlist, /IMMEDIATE_PER_SELECTION/);
+  assert.doesNotMatch(shortlist, /PENDIENTE_FACTURA|SEMANAL_DIRECT_DEBIT|professional_billable_items/);
 });
 
 test("migración 006 conserva invoice_id solo como histórico y añade PaymentIntent por selección", async () => {
