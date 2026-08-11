@@ -23,6 +23,13 @@ test("cliente puede retirar solicitud y profesional retirar oferta desde UI", as
   assert.match(source, /\/home-services\/offers\/\$\{[\s\S]*\/withdraw/);
 });
 
+test("el formulario avisa qué información es pública antes de contratar", async () => {
+  const source = await readFile(scriptUrl, "utf8");
+  assert.match(source, /zona\/localidad, no dirección exacta/);
+  assert.match(source, /visible para profesionales antes de contratar/);
+  assert.match(source, /No incluyas teléfono, email, dirección exacta, llaves ni códigos de acceso/);
+});
+
 test("lifecycle backend limita mutaciones al propietario de solicitud u oferta", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /requireRole\("cliente"\)/);
