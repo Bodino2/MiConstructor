@@ -38,6 +38,7 @@ CREATE TABLE home_service_offers (
   UNIQUE (request_id, professional_id)
 );
 CREATE INDEX home_service_offers_request_idx ON home_service_offers (request_id, status, created_at);
+CREATE INDEX home_service_offers_professional_idx ON home_service_offers (professional_id, status, created_at DESC);
 
 CREATE TABLE home_service_engagements (
   id uuid PRIMARY KEY,
@@ -47,7 +48,7 @@ CREATE TABLE home_service_engagements (
   professional_id uuid NOT NULL REFERENCES users(id),
   service_slug text NOT NULL,
   frequency text NOT NULL CHECK (frequency IN ('PUNTUAL','SEMANAL','CADA_2_SEMANAS','MENSUAL')),
-  price_cents_per_visit bigint NOT NULL CHECK (price_cents_per_visit > 0),
+  price_cents_per_visit bigint NOT NULL CHECK (price_cents_per_visit > 0 AND price_cents_per_visit <= 50000000),
   estimated_duration_minutes integer NOT NULL CHECK (estimated_duration_minutes BETWEEN 30 AND 1440),
   preferred_time_start time,
   preferred_time_end time,
@@ -58,9 +59,11 @@ CREATE TABLE home_service_engagements (
   cancelled_at timestamptz,
   cancellation_reason text,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (preferred_time_end IS NULL OR preferred_time_start IS NULL OR preferred_time_end > preferred_time_start)
 );
 CREATE INDEX home_service_engagements_participants_idx ON home_service_engagements (client_id, professional_id, status, created_at DESC);
+CREATE INDEX home_service_engagements_next_visit_idx ON home_service_engagements (next_visit_date, status) WHERE status='ACTIVO';
 
 CREATE TABLE home_service_visits (
   id uuid PRIMARY KEY,
@@ -76,9 +79,13 @@ CREATE TABLE home_service_visits (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (engagement_id, sequence_number),
-  UNIQUE (engagement_id, scheduled_date)
+  UNIQUE (engagement_id, scheduled_date),
+  CHECK (status <> 'EN_CURSO' OR started_at IS NOT NULL),
+  CHECK (status <> 'COMPLETADA' OR (started_at IS NOT NULL AND completed_at IS NOT NULL)),
+  CHECK (completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at)
 );
 CREATE INDEX home_service_visits_schedule_idx ON home_service_visits (scheduled_date, status);
+CREATE INDEX home_service_visits_engagement_status_idx ON home_service_visits (engagement_id, status, sequence_number DESC);
 
 CREATE TABLE home_service_visit_events (
   id bigserial PRIMARY KEY,
