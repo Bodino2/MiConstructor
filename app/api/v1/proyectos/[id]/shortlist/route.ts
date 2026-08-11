@@ -1,5 +1,6 @@
 import { databaseError, getD1 } from "@/lib/server/d1";
 import { requireIdentity, normalizeEmail } from "@/lib/server/identity";
+import { getSpecialtySlugForProjectCategory } from "@/lib/professional-assessment";
 import { isValidEmail } from "@/lib/validation";
 import { calculateShortlistFee } from "@/lib/shortlist-pricing";
 
@@ -20,6 +21,7 @@ export async function POST(
   const identity = requireIdentity(request);
   if (identity instanceof Response) return identity;
 
+  let shortlistId: number | null = null;
   try {
     const { id } = await params;
     const projectId = Number(id);
@@ -46,15 +48,23 @@ export async function POST(
     }
 
     const project = await db
-      .prepare("SELECT owner_email, budget_cents, status FROM projects WHERE id = ?1")
+      .prepare("SELECT owner_email, budget_cents, status, category FROM projects WHERE id = ?1")
       .bind(projectId)
-      .first<{ owner_email: string; budget_cents: number; status: string }>();
+      .first<{ owner_email: string; budget_cents: number; status: string; category: string }>();
     if (!project || project.owner_email !== identity) {
       return Response.json({ error: "Proyecto no encontrado." }, { status: 404 });
     }
-    if (!["PUBLICADO", "EN_CURSO"].includes(project.status)) {
+    if (project.status !== "PUBLICADO") {
       return Response.json(
         { error: "El proyecto no admite nuevas selecciones." },
+        { status: 409 },
+      );
+    }
+
+    const requiredSpecialty = getSpecialtySlugForProjectCategory(project.category);
+    if (!requiredSpecialty) {
+      return Response.json(
+        { error: "El proyecto no tiene una especialidad válida para selección." },
         { status: 409 },
       );
     }
@@ -79,9 +89,38 @@ export async function POST(
       );
     }
 
+    const qualification = await db
+      .prepare(
+        `SELECT verification_status
+           FROM professional_specialty_qualifications
+          WHERE professional_email = ?1 AND specialty_slug = ?2`,
+      )
+      .bind(professionalEmail, requiredSpecialty)
+      .first<{ verification_status: string }>();
+    if (!qualification || qualification.verification_status !== "APROBADO") {
+      return Response.json(
+        { error: "El profesional ya no tiene aprobada la especialidad exacta del proyecto." },
+        { status: 409 },
+      );
+    }
+
+    const proposal = await db
+      .prepare(
+        `SELECT id FROM proposals
+          WHERE project_id = ?1 AND professional_email = ?2 AND status = 'ENVIADA'`,
+      )
+      .bind(projectId, professionalEmail)
+      .first<{ id: number }>();
+    if (!proposal) {
+      return Response.json(
+        { error: "La propuesta del profesional ya no está disponible." },
+        { status: 409 },
+      );
+    }
+
     const existing = await db
       .prepare(
-        `SELECT id, fee_cents, payment_status, contact_unlocked_at
+        `SELECT id, payment_status, contact_unlocked_at
            FROM project_shortlists
           WHERE project_id = ?1 AND professional_email = ?2`,
       )
@@ -93,7 +132,6 @@ export async function POST(
         mensaje: "El contacto ya estaba desbloqueado.",
         data: {
           shortlistId: existing.id,
-          tarifaCentimos: existing.fee_cents,
           contacto: unlockedContact(professional),
         },
       });
@@ -156,7 +194,7 @@ export async function POST(
         now,
       )
       .run();
-    const shortlistId = Number(inserted.meta.last_row_id);
+    shortlistId = Number(inserted.meta.last_row_id);
 
     await db
       .prepare(
@@ -192,6 +230,7 @@ export async function POST(
           db.prepare("DELETE FROM professional_billable_items WHERE shortlist_id = ?1").bind(shortlistId),
           db.prepare("DELETE FROM project_shortlists WHERE id = ?1").bind(shortlistId),
         ]);
+      shortlistId = null;
       return Response.json(
         { error: "La cuenta profesional ha cambiado de estado. Repite la selección." },
         { status: 409 },
@@ -204,7 +243,6 @@ export async function POST(
         mensaje: "Profesional añadido a la shortlist. Contacto desbloqueado.",
         data: {
           shortlistId,
-          tarifaCentimos: pricing.feeCents,
           facturacion: "SEMANAL_DIRECT_DEBIT",
           contacto: unlockedContact(professional),
         },
@@ -212,6 +250,17 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
+    if (shortlistId) {
+      try {
+        const db = getD1();
+        await db.batch([
+          db.prepare("DELETE FROM professional_billable_items WHERE shortlist_id = ?1").bind(shortlistId),
+          db.prepare("DELETE FROM project_shortlists WHERE id = ?1").bind(shortlistId),
+        ]);
+      } catch {
+        // Preserve the original failure; cleanup can be retried by operational reconciliation.
+      }
+    }
     const message = error instanceof Error ? error.message : "";
     if (message.includes("UNIQUE constraint failed")) {
       return Response.json(
