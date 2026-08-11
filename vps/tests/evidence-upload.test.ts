@@ -9,19 +9,26 @@ import type { PrivateStorage } from "../src/services/storage.js";
 
 function testApp(assignedProfessionalId = "11111111-1111-4111-8111-111111111111") {
   const queries: string[] = [];
+  const runQuery = async (sql: string) => {
+    queries.push(sql);
+    if (sql.includes("FROM milestones m")) {
+      return {
+        rows: [{
+          assigned_professional_id: assignedProfessionalId,
+          status: "PREVISTO",
+          project_id: "22222222-2222-4222-8222-222222222222",
+        }],
+      };
+    }
+    return { rows: [] };
+  };
   const database = {
-    async query(sql: string) {
-      queries.push(sql);
-      if (sql.includes("FROM milestones m")) {
-        return {
-          rows: [{
-            assigned_professional_id: assignedProfessionalId,
-            status: "PREVISTO",
-            project_id: "22222222-2222-4222-8222-222222222222",
-          }],
-        };
-      }
-      return { rows: [] };
+    query: runQuery,
+    async connect() {
+      return {
+        query: runQuery,
+        release() {},
+      };
     },
   } as unknown as Database;
   const storage = {
@@ -62,7 +69,9 @@ test("el profesional asignado puede crear el fileId de evidencia que exige el hi
   assert.equal(response.status, 201, response.text);
   assert.match(response.body.fileId, /^[0-9a-f-]{36}$/i);
   assert.ok(queries.some((sql) => sql.includes("'HITO_EVIDENCIA'")));
-  assert.ok(queries.some((sql) => sql.includes("MILESTONE_EVIDENCE_FILE_UPLOADED") || sql.includes("INSERT INTO audit_events")));
+  assert.ok(queries.some((sql) => sql.includes("INSERT INTO audit_events")));
+  assert.ok(queries.includes("BEGIN"));
+  assert.ok(queries.includes("COMMIT"));
 });
 
 test("un profesional no asignado no puede subir evidencia al hito", async () => {
