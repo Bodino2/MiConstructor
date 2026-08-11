@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   getHomeService,
   getHomeServiceCatalog,
+  madridDateIso,
   nextOccurrenceDate,
   recurrenceAllowed,
 } from "../../../lib/home-service-catalog.js";
@@ -45,16 +46,21 @@ const offerSchema = z.object({
 const reasonSchema = z.object({ reason: z.string().trim().min(5).max(1000) });
 const completionSchema = z.object({ notes: z.string().trim().max(2000).default("") });
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function laterDate(first: string, second: string) {
-  return first >= second ? first : second;
+function laterDate(...values: string[]) {
+  return values.reduce((latest, value) => value > latest ? value : latest);
 }
 
 function timeSql(value: string | null | undefined) {
   return value || null;
+}
+
+function requiredSpecialty(vertical: string) {
+  return vertical === "limpieza_mantenimiento" ? "limpieza_profesional" : "jardineria";
+}
+
+function anchorDay(startDate: string) {
+  const day = Number(startDate.slice(8, 10));
+  return Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
 }
 
 export function homeServicesRouter(database: Database) {
@@ -102,7 +108,7 @@ export function homeServicesRouter(database: Database) {
       const service = getHomeService(parsed.data.serviceSlug);
       if (!service) return response.status(400).json({ error: "Servicio no disponible." });
       if (!recurrenceAllowed(service.slug, parsed.data.frequency)) return response.status(400).json({ error: "La frecuencia elegida no es válida para este servicio." });
-      if (parsed.data.requestedStartDate < todayIso()) return response.status(400).json({ error: "La fecha de inicio no puede estar en el pasado." });
+      if (parsed.data.requestedStartDate < madridDateIso()) return response.status(400).json({ error: "La fecha de inicio no puede estar en el pasado." });
       if (parsed.data.preferredTimeStart && parsed.data.preferredTimeEnd && parsed.data.preferredTimeEnd <= parsed.data.preferredTimeStart) {
         return response.status(400).json({ error: "La franja horaria final debe ser posterior a la inicial." });
       }
@@ -135,6 +141,9 @@ export function homeServicesRouter(database: Database) {
         return response.json({ requests: rows.rows });
       }
       if (request.user!.role === "profesional") {
+        if (!request.user!.emailVerified || request.user!.accountStatus !== "ACTIVO" || request.user!.verificationStatus !== "APROBADO") {
+          return response.status(403).json({ error: "Tu cuenta profesional debe estar verificada y activa." });
+        }
         const rows = await database.query(
           `SELECT r.id, r.vertical, r.service_slug, r.location, r.property_type, r.square_meters,
                   r.requested_start_date, r.preferred_time_start, r.preferred_time_end, r.frequency,
@@ -157,18 +166,44 @@ export function homeServicesRouter(database: Database) {
     } catch (error) { next(error); }
   });
 
+  router.get("/home-services/requests/:id/offers", requireAuth, requireRole("cliente", "admin"), async (request, response, next) => {
+    try {
+      const requestId = z.string().uuid().safeParse(request.params.id);
+      if (!requestId.success) return response.status(400).json({ error: "Solicitud no válida." });
+      const owner = await database.query<{ client_id: string }>("SELECT client_id FROM home_service_requests WHERE id=$1", [requestId.data]);
+      if (!owner.rows[0] || (request.user!.role !== "admin" && owner.rows[0].client_id !== request.user!.id)) {
+        return response.status(404).json({ error: "Solicitud no encontrada." });
+      }
+      const rows = await database.query(
+        `SELECT o.id, o.professional_id, o.amount_cents_per_visit, o.estimated_duration_minutes,
+                o.first_available_date, o.message, o.status, o.created_at,
+                COALESCE(NULLIF(u.company_name,''),u.name) AS professional_display_name,
+                COALESCE((SELECT avg(r.rating)::numeric(3,2) FROM reviews r WHERE r.subject_id=u.id AND r.status='PUBLICADA'),0) AS rating,
+                (SELECT count(*)::int FROM reviews r WHERE r.subject_id=u.id AND r.status='PUBLICADA') AS review_count
+           FROM home_service_offers o
+           JOIN users u ON u.id=o.professional_id
+          WHERE o.request_id=$1
+          ORDER BY CASE o.status WHEN 'ACEPTADA' THEN 0 WHEN 'ENVIADA' THEN 1 ELSE 2 END, o.created_at`,
+        [requestId.data],
+      );
+      response.json({ offers: rows.rows });
+    } catch (error) { next(error); }
+  });
+
   router.post("/home-services/requests/:id/offers", requireAuth, requireRole("profesional"), async (request, response, next) => {
     try {
+      if (!request.user!.emailVerified || request.user!.accountStatus !== "ACTIVO" || request.user!.verificationStatus !== "APROBADO") {
+        return response.status(403).json({ error: "Tu cuenta profesional debe estar verificada y activa." });
+      }
       const requestId = z.string().uuid().safeParse(request.params.id);
       if (!requestId.success) return response.status(400).json({ error: "Solicitud no válida." });
       const parsed = offerSchema.safeParse(request.body);
       if (!parsed.success) return response.status(400).json({ error: parsed.error.issues[0]?.message });
-      if (parsed.data.firstAvailableDate < todayIso()) return response.status(400).json({ error: "La primera fecha disponible no puede estar en el pasado." });
-      const state = await database.query<{ status: string; verification_status: string; qualification_status: string | null }>(
-        `SELECT r.status, u.verification_status, q.verification_status AS qualification_status
+      if (parsed.data.firstAvailableDate < madridDateIso()) return response.status(400).json({ error: "La primera fecha disponible no puede estar en el pasado." });
+      const state = await database.query<{ status: string; vertical: string; qualification_status: string | null }>(
+        `SELECT r.status, r.vertical, q.verification_status AS qualification_status
            FROM home_service_requests r
-           JOIN users u ON u.id=$2
-           LEFT JOIN professional_specialty_qualifications q ON q.professional_id=u.id
+           LEFT JOIN professional_specialty_qualifications q ON q.professional_id=$2
              AND q.specialty_slug = CASE WHEN r.vertical='limpieza_mantenimiento' THEN 'limpieza_profesional' ELSE 'jardineria' END
           WHERE r.id=$1`,
         [requestId.data, request.user!.id],
@@ -176,7 +211,7 @@ export function homeServicesRouter(database: Database) {
       const row = state.rows[0];
       if (!row) return response.status(404).json({ error: "Solicitud no encontrada." });
       if (row.status !== "PUBLICADO") return response.status(409).json({ error: "La solicitud ya no admite ofertas." });
-      if (row.verification_status !== "APROBADO" || row.qualification_status !== "APROBADO") return response.status(403).json({ error: "Tu cuenta y la especialidad requerida deben estar aprobadas." });
+      if (row.qualification_status !== "APROBADO") return response.status(403).json({ error: "La especialidad requerida debe estar aprobada." });
       const id = randomUUID();
       await database.query(
         `INSERT INTO home_service_offers
@@ -197,8 +232,8 @@ export function homeServicesRouter(database: Database) {
       const offerId = z.string().uuid().safeParse(request.params.offerId);
       if (!requestId.success || !offerId.success) return response.status(400).json({ error: "Selección no válida." });
       const result = await withTransaction(database, async (client) => {
-        const req = await client.query<{ client_id: string; service_slug: string; frequency: ServiceFrequency; requested_start_date: string; preferred_time_start: string | null; preferred_time_end: string | null; status: string }>(
-          `SELECT client_id, service_slug, frequency, requested_start_date::text,
+        const req = await client.query<{ client_id: string; vertical: string; service_slug: string; frequency: ServiceFrequency; requested_start_date: string; preferred_time_start: string | null; preferred_time_end: string | null; status: string }>(
+          `SELECT client_id, vertical, service_slug, frequency, requested_start_date::text,
                   preferred_time_start::text, preferred_time_end::text, status
              FROM home_service_requests WHERE id=$1 FOR UPDATE`, [requestId.data]);
         const serviceRequest = req.rows[0];
@@ -210,7 +245,20 @@ export function homeServicesRouter(database: Database) {
             WHERE id=$1 AND request_id=$2 FOR UPDATE`, [offerId.data, requestId.data]);
         const offer = offers.rows[0];
         if (!offer || offer.status !== "ENVIADA") return { status: 404, body: { error: "Oferta no disponible." } };
-        const firstVisitDate = laterDate(serviceRequest.requested_start_date, offer.first_available_date);
+        const professional = await client.query<{ account_status: string; email_verified: boolean; verification_status: string; qualification_status: string | null }>(
+          `SELECT u.account_status, u.email_verified, u.verification_status,
+                  q.verification_status AS qualification_status
+             FROM users u
+             LEFT JOIN professional_specialty_qualifications q ON q.professional_id=u.id AND q.specialty_slug=$2
+            WHERE u.id=$1 AND u.role='profesional'`,
+          [offer.professional_id, requiredSpecialty(serviceRequest.vertical)],
+        );
+        const professionalState = professional.rows[0];
+        if (!professionalState || professionalState.account_status !== "ACTIVO" || !professionalState.email_verified
+          || professionalState.verification_status !== "APROBADO" || professionalState.qualification_status !== "APROBADO") {
+          return { status: 409, body: { error: "El profesional ya no está disponible o verificado para este servicio." } };
+        }
+        const firstVisitDate = laterDate(serviceRequest.requested_start_date, offer.first_available_date, madridDateIso());
         const engagementId = randomUUID();
         const visitId = randomUUID();
         await client.query("UPDATE home_service_requests SET status='ASIGNADO', assigned_professional_id=$2, updated_at=now() WHERE id=$1", [requestId.data, offer.professional_id]);
@@ -260,12 +308,30 @@ export function homeServicesRouter(database: Database) {
     try {
       const id = z.string().uuid().safeParse(request.params.id);
       if (!id.success) return response.status(400).json({ error: "Servicio no válido." });
-      const result = await database.query(
-        `UPDATE home_service_engagements SET status='PAUSADO', paused_at=now(), next_visit_date=NULL, updated_at=now()
-          WHERE id=$1 AND client_id=$2 AND status='ACTIVO' AND frequency<>'PUNTUAL' RETURNING id,status`, [id.data, request.user!.id]);
-      if (!result.rows[0]) return response.status(409).json({ error: "El servicio no puede pausarse en su estado actual." });
-      await audit(database, { actorUserId: request.user!.id, action: "HOME_SERVICE_PAUSED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip });
-      response.json({ engagement: result.rows[0] });
+      const result = await withTransaction(database, async (client) => {
+        const engagement = await client.query<{ status: string; frequency: ServiceFrequency }>(
+          "SELECT status,frequency FROM home_service_engagements WHERE id=$1 AND client_id=$2 FOR UPDATE", [id.data, request.user!.id]);
+        const row = engagement.rows[0];
+        if (!row || row.status !== "ACTIVO" || row.frequency === "PUNTUAL") return null;
+        const inProgress = await client.query("SELECT 1 FROM home_service_visits WHERE engagement_id=$1 AND status='EN_CURSO' LIMIT 1", [id.data]);
+        if (inProgress.rows[0]) return { conflict: true };
+        const cancelled = await client.query<{ id: string; scheduled_date: string }>(
+          `UPDATE home_service_visits SET status='CANCELADA_CLIENTE', updated_at=now()
+            WHERE engagement_id=$1 AND status='PROGRAMADA'
+            RETURNING id,scheduled_date::text`, [id.data]);
+        for (const visit of cancelled.rows) {
+          await client.query(
+            "INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type, metadata) VALUES ($1,$2,'CANCELADA',jsonb_build_object('reason','PAUSA_SERVICIO'))",
+            [visit.id, request.user!.id],
+          );
+        }
+        await client.query("UPDATE home_service_engagements SET status='PAUSADO', paused_at=now(), next_visit_date=NULL, updated_at=now() WHERE id=$1", [id.data]);
+        await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_PAUSED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip, metadata: { cancelledVisits: cancelled.rowCount ?? 0 } });
+        return { id: id.data, status: "PAUSADO", conflict: false };
+      });
+      if (!result) return response.status(409).json({ error: "El servicio no puede pausarse en su estado actual." });
+      if (result.conflict) return response.status(409).json({ error: "No puedes pausar el servicio mientras hay una visita en curso." });
+      response.json({ engagement: result });
     } catch (error) { next(error); }
   });
 
@@ -274,15 +340,18 @@ export function homeServicesRouter(database: Database) {
       const id = z.string().uuid().safeParse(request.params.id);
       if (!id.success) return response.status(400).json({ error: "Servicio no válido." });
       const result = await withTransaction(database, async (client) => {
-        const engagement = await client.query<{ frequency: ServiceFrequency; preferred_time_start: string | null; status: string }>(
-          "SELECT frequency, preferred_time_start::text, status FROM home_service_engagements WHERE id=$1 AND client_id=$2 FOR UPDATE", [id.data, request.user!.id]);
+        const engagement = await client.query<{ frequency: ServiceFrequency; preferred_time_start: string | null; status: string; start_date: string }>(
+          "SELECT frequency, preferred_time_start::text, status, start_date::text FROM home_service_engagements WHERE id=$1 AND client_id=$2 FOR UPDATE", [id.data, request.user!.id]);
         const row = engagement.rows[0];
         if (!row || row.status !== "PAUSADO" || row.frequency === "PUNTUAL") return null;
+        const pending = await client.query("SELECT 1 FROM home_service_visits WHERE engagement_id=$1 AND status IN ('PROGRAMADA','EN_CURSO') LIMIT 1", [id.data]);
+        if (pending.rows[0]) return null;
         const last = await client.query<{ scheduled_date: string; sequence_number: number }>(
           "SELECT scheduled_date::text, sequence_number FROM home_service_visits WHERE engagement_id=$1 ORDER BY sequence_number DESC LIMIT 1", [id.data]);
         if (!last.rows[0]) return null;
-        let nextDate = nextOccurrenceDate(last.rows[0].scheduled_date, row.frequency);
-        while (nextDate && nextDate < todayIso()) nextDate = nextOccurrenceDate(nextDate, row.frequency);
+        const recurrenceAnchor = anchorDay(row.start_date);
+        let nextDate = nextOccurrenceDate(last.rows[0].scheduled_date, row.frequency, recurrenceAnchor);
+        while (nextDate && nextDate < madridDateIso()) nextDate = nextOccurrenceDate(nextDate, row.frequency, recurrenceAnchor);
         if (!nextDate) return null;
         const visitId = randomUUID();
         const sequence = last.rows[0].sequence_number + 1;
@@ -302,19 +371,30 @@ export function homeServicesRouter(database: Database) {
       const id = z.string().uuid().safeParse(request.params.id);
       const parsed = reasonSchema.safeParse(request.body);
       if (!id.success || !parsed.success) return response.status(400).json({ error: "Cancelación no válida." });
-      const result = await database.query<{ client_id: string; professional_id: string; status: string; request_id: string }>(
-        "SELECT client_id, professional_id, status, request_id FROM home_service_engagements WHERE id=$1", [id.data]);
-      const row = result.rows[0];
-      if (!row || (request.user!.role !== "admin" && row.client_id !== request.user!.id && row.professional_id !== request.user!.id)) return response.status(404).json({ error: "Servicio no encontrado." });
-      if (["CANCELADO", "FINALIZADO"].includes(row.status)) return response.status(409).json({ error: "El servicio ya está cerrado." });
-      const visitStatus = request.user!.role === "profesional" ? "CANCELADA_PROFESIONAL" : "CANCELADA_CLIENTE";
-      await withTransaction(database, async (client) => {
+      const result = await withTransaction(database, async (client) => {
+        const engagement = await client.query<{ client_id: string; professional_id: string; status: string; request_id: string }>(
+          "SELECT client_id, professional_id, status, request_id FROM home_service_engagements WHERE id=$1 FOR UPDATE", [id.data]);
+        const row = engagement.rows[0];
+        if (!row || (request.user!.role !== "admin" && row.client_id !== request.user!.id && row.professional_id !== request.user!.id)) return { status: 404, body: { error: "Servicio no encontrado." } };
+        if (["CANCELADO", "FINALIZADO"].includes(row.status)) return { status: 409, body: { error: "El servicio ya está cerrado." } };
+        const inProgress = await client.query("SELECT 1 FROM home_service_visits WHERE engagement_id=$1 AND status='EN_CURSO' LIMIT 1", [id.data]);
+        if (inProgress.rows[0]) return { status: 409, body: { error: "No puedes cancelar el servicio mientras hay una visita en curso." } };
+        const visitStatus = request.user!.role === "profesional" ? "CANCELADA_PROFESIONAL" : request.user!.role === "cliente" ? "CANCELADA_CLIENTE" : "NO_REALIZADA";
+        const cancelled = await client.query<{ id: string }>(
+          `UPDATE home_service_visits SET status=$2, updated_at=now()
+            WHERE engagement_id=$1 AND status='PROGRAMADA' RETURNING id`, [id.data, visitStatus]);
+        for (const visit of cancelled.rows) {
+          await client.query(
+            "INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type, metadata) VALUES ($1,$2,'CANCELADA',jsonb_build_object('reason',$3::text,'source','ENGAGEMENT_CANCELLED'))",
+            [visit.id, request.user!.id, parsed.data.reason],
+          );
+        }
         await client.query("UPDATE home_service_engagements SET status='CANCELADO', cancelled_at=now(), cancellation_reason=$2, next_visit_date=NULL, updated_at=now() WHERE id=$1", [id.data, parsed.data.reason]);
         await client.query("UPDATE home_service_requests SET status='CANCELADO', updated_at=now() WHERE id=$1", [row.request_id]);
-        await client.query("UPDATE home_service_visits SET status=$2, updated_at=now() WHERE engagement_id=$1 AND status='PROGRAMADA'", [id.data, visitStatus]);
         await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_CANCELLED", entityType: "home_service_engagement", entityId: id.data, ip: request.ip, metadata: { reason: parsed.data.reason, visitStatus } });
+        return { status: 200, body: { success: true, status: "CANCELADO" } };
       });
-      response.json({ success: true, status: "CANCELADO" });
+      response.status(result.status).json(result.body);
     } catch (error) { next(error); }
   });
 
@@ -322,14 +402,21 @@ export function homeServicesRouter(database: Database) {
     try {
       const id = z.string().uuid().safeParse(request.params.id);
       if (!id.success) return response.status(400).json({ error: "Visita no válida." });
-      const result = await database.query(
-        `UPDATE home_service_visits v SET status='EN_CURSO', started_at=now(), updated_at=now()
-          FROM home_service_engagements e
-         WHERE v.id=$1 AND v.engagement_id=e.id AND e.professional_id=$2 AND e.status='ACTIVO' AND v.status='PROGRAMADA'
-         RETURNING v.id,v.status,v.engagement_id`, [id.data, request.user!.id]);
-      if (!result.rows[0]) return response.status(409).json({ error: "La visita no puede iniciarse." });
-      await database.query("INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type) VALUES ($1,$2,'INICIADA')", [id.data, request.user!.id]);
-      response.json({ visit: result.rows[0] });
+      const result = await withTransaction(database, async (client) => {
+        const updated = await client.query<{ id: string; status: string; engagement_id: string }>(
+          `UPDATE home_service_visits v SET status='EN_CURSO', started_at=now(), updated_at=now()
+            FROM home_service_engagements e
+           WHERE v.id=$1 AND v.engagement_id=e.id AND e.professional_id=$2 AND e.status='ACTIVO'
+             AND v.status='PROGRAMADA' AND v.scheduled_date <= $3::date
+           RETURNING v.id,v.status,v.engagement_id`, [id.data, request.user!.id, madridDateIso()]);
+        const visit = updated.rows[0];
+        if (!visit) return null;
+        await client.query("INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type) VALUES ($1,$2,'INICIADA')", [id.data, request.user!.id]);
+        await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_VISIT_STARTED", entityType: "home_service_visit", entityId: id.data, ip: request.ip });
+        return visit;
+      });
+      if (!result) return response.status(409).json({ error: "La visita no puede iniciarse antes de su fecha ni en su estado actual." });
+      response.json({ visit: result });
     } catch (error) { next(error); }
   });
 
@@ -344,14 +431,16 @@ export function homeServicesRouter(database: Database) {
              FROM home_service_visits v JOIN home_service_engagements e ON e.id=v.engagement_id
             WHERE v.id=$1 AND e.professional_id=$2 FOR UPDATE`, [id.data, request.user!.id]);
         const visit = visits.rows[0];
-        if (!visit || !["PROGRAMADA", "EN_CURSO"].includes(visit.status)) return null;
-        const engagements = await client.query<{ frequency: ServiceFrequency; status: string; preferred_time_start: string | null; request_id: string }>(
-          "SELECT frequency,status,preferred_time_start::text,request_id FROM home_service_engagements WHERE id=$1 FOR UPDATE", [visit.engagement_id]);
+        if (!visit || visit.status !== "EN_CURSO") return null;
+        const engagements = await client.query<{ frequency: ServiceFrequency; status: string; preferred_time_start: string | null; request_id: string; start_date: string }>(
+          "SELECT frequency,status,preferred_time_start::text,request_id,start_date::text FROM home_service_engagements WHERE id=$1 FOR UPDATE", [visit.engagement_id]);
         const engagement = engagements.rows[0];
         if (!engagement || engagement.status !== "ACTIVO") return null;
         await client.query("UPDATE home_service_visits SET status='COMPLETADA', completed_at=now(), completion_notes=$2, updated_at=now() WHERE id=$1", [id.data, parsed.data.notes]);
         await client.query("INSERT INTO home_service_visit_events (visit_id, actor_user_id, event_type, metadata) VALUES ($1,$2,'COMPLETADA',jsonb_build_object('notes',$3::text))", [id.data, request.user!.id, parsed.data.notes]);
-        const nextDate = nextOccurrenceDate(visit.scheduled_date, engagement.frequency);
+        const recurrenceAnchor = anchorDay(engagement.start_date);
+        let nextDate = nextOccurrenceDate(visit.scheduled_date, engagement.frequency, recurrenceAnchor);
+        while (nextDate && nextDate <= madridDateIso()) nextDate = nextOccurrenceDate(nextDate, engagement.frequency, recurrenceAnchor);
         if (!nextDate) {
           await client.query("UPDATE home_service_engagements SET status='FINALIZADO', next_visit_date=NULL, updated_at=now() WHERE id=$1", [visit.engagement_id]);
           await client.query("UPDATE home_service_requests SET status='FINALIZADO', updated_at=now() WHERE id=$1", [engagement.request_id]);
@@ -366,7 +455,7 @@ export function homeServicesRouter(database: Database) {
         await audit(client, { actorUserId: request.user!.id, action: "HOME_SERVICE_VISIT_COMPLETED", entityType: "home_service_visit", entityId: id.data, ip: request.ip, metadata: { recurring: true, nextDate, nextVisitId: nextId } });
         return { completed: true, engagementStatus: "ACTIVO", nextVisit: { id: nextId, sequenceNumber: sequence, scheduledDate: nextDate } };
       });
-      if (!result) return response.status(409).json({ error: "La visita no puede finalizarse." });
+      if (!result) return response.status(409).json({ error: "La visita debe estar en curso antes de finalizarse." });
       response.json(result);
     } catch (error) { next(error); }
   });
