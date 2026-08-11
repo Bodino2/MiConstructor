@@ -4,6 +4,8 @@ CREATE TABLE home_service_requests (
   vertical text NOT NULL CHECK (vertical IN ('limpieza_mantenimiento','jardin_exterior')),
   service_slug text NOT NULL,
   location text NOT NULL,
+  service_address text,
+  access_notes text NOT NULL DEFAULT '',
   property_type text NOT NULL CHECK (property_type IN ('PISO','CASA','CHALET','COMUNIDAD','LOCAL','JARDIN','PARCELA','OTRO')),
   square_meters numeric(10,2) CHECK (square_meters > 0 AND square_meters <= 100000),
   bedrooms integer CHECK (bedrooms BETWEEN 0 AND 50),
@@ -19,6 +21,8 @@ CREATE TABLE home_service_requests (
   assigned_professional_id uuid REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (service_address IS NULL OR length(btrim(service_address)) BETWEEN 5 AND 300),
+  CHECK (length(access_notes) <= 1000),
   CHECK (preferred_time_end IS NULL OR preferred_time_start IS NULL OR preferred_time_end > preferred_time_start)
 );
 CREATE INDEX home_service_requests_client_idx ON home_service_requests (client_id, created_at DESC);
@@ -64,6 +68,25 @@ CREATE TABLE home_service_engagements (
 );
 CREATE INDEX home_service_engagements_participants_idx ON home_service_engagements (client_id, professional_id, status, created_at DESC);
 CREATE INDEX home_service_engagements_next_visit_idx ON home_service_engagements (next_visit_date, status) WHERE status='ACTIVO';
+
+CREATE OR REPLACE FUNCTION require_home_service_private_address() RETURNS trigger AS $$
+DECLARE
+  private_address text;
+BEGIN
+  SELECT service_address INTO private_address
+    FROM home_service_requests
+   WHERE id=NEW.request_id;
+
+  IF private_address IS NULL OR length(btrim(private_address)) < 5 THEN
+    RAISE EXCEPTION 'home_service_private_address_required';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER home_service_engagement_requires_private_address
+BEFORE INSERT ON home_service_engagements
+FOR EACH ROW EXECUTE FUNCTION require_home_service_private_address();
 
 CREATE TABLE home_service_visits (
   id uuid PRIMARY KEY,
