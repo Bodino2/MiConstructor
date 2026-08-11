@@ -16,7 +16,7 @@ test("el módulo lifecycle es JavaScript válido y carga después del flujo prin
 
 test("cliente puede retirar solicitud y profesional retirar oferta desde UI", async () => {
   const source = await readFile(scriptUrl, "utf8");
-  assert.match(source, /data\.hslCancelRequest/);
+  assert.match(source, /cancel\.dataset\.hslCancelRequest/);
   assert.match(source, /\/home-services\/requests\/\$\{[\s\S]*\/cancel/);
   assert.match(source, /\/home-services\/my-offers/);
   assert.match(source, /data-hsl-withdraw-offer/);
