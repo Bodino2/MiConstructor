@@ -17,6 +17,7 @@ import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./rout
 import { marketplaceRouter } from "./routes/marketplace.js";
 import { mobileAuthRouter } from "./routes/mobile-auth.js";
 import { operatingSystemRouter } from "./routes/operating-system.js";
+import { unifiedAssessmentsRouter } from "./routes/unified-assessments.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
@@ -91,6 +92,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.post("/api/v1/auth/register", registrationLegalGate);
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
+  app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
   app.use("/api/v1", writeLimiter, operatingSystemRouter(database, config, storage));
