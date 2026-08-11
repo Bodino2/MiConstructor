@@ -20,6 +20,18 @@ import { uploadsRouter } from "./routes/uploads.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
 
+const domainConflictMessages: Array<[string, string]> = [
+  ["shortlist_client_not_project_owner", "El proyecto ya no puede seleccionarse desde esta cuenta."],
+  ["shortlist_project_not_open", "El proyecto ya no admite selecciones."],
+  ["shortlist_active_proposal_required", "La propuesta ya no está disponible para selección."],
+  ["shortlist_professional_not_eligible", "El profesional ya no cumple los requisitos para este proyecto."],
+  ["contract_client_not_project_owner", "El proyecto ya no puede contratarse desde esta cuenta."],
+  ["contract_project_not_open", "El proyecto ya no admite contratación."],
+  ["contract_active_proposal_required", "La propuesta ya no está disponible para contratación."],
+  ["contract_shortlist_required", "Debes seleccionar al profesional antes de aceptar su propuesta."],
+  ["contract_professional_not_eligible", "El profesional ya no cumple los requisitos para formalizar el contrato."],
+];
+
 export function createApp(dependencies: { database: Database; config: AppConfig; storage: PrivateStorage }) {
   const { database, config, storage } = dependencies;
   const app = express();
@@ -122,6 +134,9 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use((error: unknown, request: Request, response: Response, _next: NextFunction) => {
     const message = error instanceof Error ? error.message : "Error desconocido";
     console.error(JSON.stringify({ level: "error", requestId: response.getHeader("x-request-id"), path: request.path, message }));
+    for (const [code, publicMessage] of domainConflictMessages) {
+      if (message.includes(code)) return response.status(409).json({ error: publicMessage });
+    }
     if (message.includes("Tipo de archivo") || message.includes("File too large")) {
       return response.status(400).json({ error: message.includes("large") ? "El archivo supera el límite permitido." : message });
     }
