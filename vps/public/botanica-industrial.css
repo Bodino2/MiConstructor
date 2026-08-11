@@ -50,7 +50,7 @@ body, button, input, textarea, select {
 }
 
 .brand { color: #fff; }
-.brand img { filter: saturate(.95) contrast(1.05); }
+.brand img { opacity: 1; }
 .brand span { color: #fff; }
 
 .topbar nav { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
