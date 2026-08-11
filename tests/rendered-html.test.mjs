@@ -26,8 +26,11 @@ test("el artefacto conserva el título y la marca de desarrollo", async () => {
   assert.match(workerSource, /miconstructor-platform\.webp/);
   assert.match(workerSource, /construcción modular conectada digitalmente/);
   assert.match(workerSource, /Gratis hasta entrar/);
-  assert.match(workerSource, /Cierre semanal/);
-  assert.match(workerSource, /Domiciliación bancaria obligatoria/);
+  assert.match(workerSource, /Cobro único/);
+  assert.match(workerSource, /Al ser seleccionado/);
+  assert.match(workerSource, /Domiciliación/);
+  assert.doesNotMatch(workerSource, /Cierre semanal/);
+  assert.doesNotMatch(workerSource, /COBRO DE SELECCIONES[\s\S]{0,120}Semanal/);
   assert.doesNotMatch(publicLandingSource, /3%, 4% o 5%/);
   assert.doesNotMatch(publicLandingSource, /Proyecto superior a 10\.000 €/);
   assert.match(workerSource, /Test de conocimientos obligatorio/);
