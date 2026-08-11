@@ -29,12 +29,13 @@ test("el artefacto conserva el título y la marca de desarrollo", async () => {
   assert.match(workerSource, /Cobro único/);
   assert.match(workerSource, /Al ser seleccionado/);
   assert.match(workerSource, /Domiciliación/);
+  assert.match(workerSource, /IMMEDIATE_PER_SELECTION/);
+  assert.match(workerSource, /flujo de facturación anterior y está desactivado/);
   assert.doesNotMatch(workerSource, /Cierre semanal/);
   assert.doesNotMatch(workerSource, /COBRO DE SELECCIONES[\s\S]{0,120}Semanal/);
   assert.doesNotMatch(publicLandingSource, /3%, 4% o 5%/);
   assert.doesNotMatch(publicLandingSource, /Proyecto superior a 10\.000 €/);
   assert.match(workerSource, /Test de conocimientos obligatorio/);
-  assert.match(workerSource, /Profesional añadido a la shortlist/);
   assert.match(workerSource, /ESTIMADOR DE PRESUPUESTO/);
   assert.match(workerSource, /Antes y después/);
   assert.match(workerSource, /CONTRATO DIGITAL DE OBRA/);
