@@ -16,6 +16,11 @@ const decisionSchema = z.object({
   reason: z.string().trim().min(5).max(1000),
 });
 
+const qualificationDecisionSchema = z.object({
+  decision: z.enum(["APROBAR", "RECHAZAR", "SUSPENDER"]),
+  reason: z.string().trim().min(5).max(1000),
+});
+
 type Queryable = Pick<Database, "query"> | Pick<DatabaseClient, "query">;
 
 type PersistedFile = StoredFile & { id: string };
@@ -89,24 +94,24 @@ async function verificationReadiness(database: Queryable, professionalId: string
   };
 }
 
-async function refreshProfessionalStatus(database: Queryable, professionalId: string) {
+async function refreshProfessionalStatus(database: Queryable, professionalId: string, preserveSuspended = true) {
   const readiness = await verificationReadiness(database, professionalId);
   const approved = readiness.documentsApproved && readiness.qualificationApproved;
   await database.query(
     `UPDATE users
         SET verification_status = CASE
-              WHEN verification_status = 'SUSPENDIDO' THEN 'SUSPENDIDO'
+              WHEN $3::boolean AND verification_status = 'SUSPENDIDO' THEN 'SUSPENDIDO'
               WHEN $2::boolean THEN 'APROBADO'
               ELSE 'PENDIENTE_REVISION'
             END,
             verification_reason = CASE
-              WHEN verification_status = 'SUSPENDIDO' THEN verification_reason
+              WHEN $3::boolean AND verification_status = 'SUSPENDIDO' THEN verification_reason
               WHEN $2::boolean THEN 'Verificación técnica y documental completada.'
               ELSE 'Pendiente de completar la verificación técnica y documental obligatoria.'
             END,
             updated_at = now()
       WHERE id = $1 AND role = 'profesional'`,
-    [professionalId, approved],
+    [professionalId, approved, preserveSuspended],
   );
   return { ...readiness, approved };
 }
@@ -230,6 +235,59 @@ export function professionalVerificationRouter(database: Database, config: AppCo
             ORDER BY d.created_at, d.id`,
         );
         response.json({ documents: documents.rows });
+      } catch (error) { next(error); }
+    },
+  );
+
+  router.post(
+    "/admin/qualifications/:id/decision",
+    requireAuth,
+    requireRole("admin"),
+    async (request, response, next) => {
+      try {
+        const id = z.string().uuid().safeParse(request.params.id);
+        const body = qualificationDecisionSchema.safeParse(request.body);
+        if (!id.success || !body.success) return response.status(400).json({ error: "Decisión no válida." });
+        const qualificationStatus = { APROBAR: "APROBADO", RECHAZAR: "RECHAZADO", SUSPENDER: "SUSPENDIDO" }[body.data.decision];
+
+        const result = await withTransaction(database, async (client) => {
+          const updated = await client.query<{ professional_id: string }>(
+            `UPDATE professional_specialty_qualifications
+                SET verification_status = $2, reviewed_at = now(), reviewed_by = $3,
+                    review_reason = $4, updated_at = now()
+              WHERE id = $1
+              RETURNING professional_id`,
+            [id.data, qualificationStatus, request.user!.id, body.data.reason],
+          );
+          const row = updated.rows[0];
+          if (!row) return null;
+
+          let readiness;
+          if (qualificationStatus === "SUSPENDIDO") {
+            await client.query(
+              `UPDATE users
+                  SET verification_status = 'SUSPENDIDO', verification_reason = $2, updated_at = now()
+                WHERE id = $1`,
+              [row.professional_id, body.data.reason],
+            );
+            readiness = { ...(await verificationReadiness(client, row.professional_id)), approved: false };
+          } else {
+            readiness = await refreshProfessionalStatus(client, row.professional_id, false);
+          }
+
+          await audit(client, {
+            actorUserId: request.user!.id,
+            action: `QUALIFICATION_${qualificationStatus}`,
+            entityType: "qualification",
+            entityId: id.data,
+            ip: request.ip,
+            metadata: { reason: body.data.reason },
+          });
+          return readiness;
+        });
+
+        if (!result) return response.status(404).json({ error: "Evaluación no encontrada." });
+        response.json({ success: true, status: qualificationStatus, professionalVerification: result });
       } catch (error) { next(error); }
     },
   );
