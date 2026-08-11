@@ -113,6 +113,20 @@ test("el endpoint rechaza rangos de fecha invertidos antes de consultar la base"
   assert.equal(queries, 0);
 });
 
+test("el endpoint rechaza fechas inexistentes antes de llegar a PostgreSQL", async () => {
+  let queries = 0;
+  const database = { query: async () => { queries += 1; return { rows: [] }; } } as unknown as Database;
+  const app = express();
+  app.use((req, _res, next) => { req.user = adminUser(); next(); });
+  app.use("/api/v1", adminBillingRouter(database));
+
+  const response = await request(app).get("/api/v1/admin/billing").query({ from: "2026-02-30" });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /fecha no válida/i);
+  assert.equal(queries, 0);
+});
+
 test("la facturación admin queda protegida y no expone porcentajes internos", async () => {
   const route = await readFile(routeUrl, "utf8");
   assert.match(route, /router\.use\(requireAuth, requireRole\("admin"\)\)/);
@@ -134,7 +148,7 @@ test("el panel carga la pestaña, filtros, detalle y exportación CSV", async ()
 
   assert.match(index, /admin-billing\.css[\s\S]*admin-billing-ui\.js/);
   assert.match(index, /admin-dashboard\.js[\s\S]*admin-billing-ui\.js/);
-  assert.match(ui, /data\.adminTab = "billing"/);
+  assert.match(ui, /dataset\.adminTab = "billing"/);
   assert.match(ui, /\/api\/v1\/admin\/billing/);
   assert.match(ui, /Quién pagó, por qué concepto, cuánto, cuándo/);
   assert.match(ui, /professional_company \|\| entry\.professional_name/);
