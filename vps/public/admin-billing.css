@@ -1,0 +1,113 @@
+.admin-kpi[data-admin-open-billing] {
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.admin-kpi[data-admin-open-billing]:hover,
+.admin-kpi[data-admin-open-billing]:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--mc-action, #087a55);
+  box-shadow: var(--mc-shadow, 0 10px 25px rgba(0, 0, 0, .06));
+  outline: none;
+}
+
+.admin-billing-kpis {
+  margin: 0 0 18px;
+}
+
+.admin-billing-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr) minmax(150px, .9fr) minmax(150px, .9fr);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .78);
+}
+
+.admin-billing-toolbar label {
+  margin: 0;
+}
+
+.admin-billing-filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.admin-billing-results-head {
+  margin-top: 4px;
+}
+
+.admin-billing-entry h3 {
+  margin: 3px 0 5px;
+}
+
+.admin-billing-amount {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  text-align: right;
+}
+
+.admin-billing-amount > strong {
+  font-size: 24px;
+  letter-spacing: -.035em;
+}
+
+.admin-billing-description {
+  margin: 14px 0 0;
+  color: var(--ink) !important;
+  font-weight: 650;
+}
+
+.admin-billing-entry .admin-meta-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-billing-failure {
+  margin-top: 12px;
+}
+
+.admin-billing-failure p {
+  margin: 4px 0 0;
+  color: inherit;
+}
+
+@media (max-width: 1100px) {
+  .admin-billing-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-billing-entry .admin-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-billing-toolbar,
+  .admin-billing-entry .admin-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-billing-filter-actions {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+
+  .admin-billing-filter-actions .button {
+    width: 100%;
+  }
+
+  .admin-billing-entry .list-item-head {
+    flex-direction: column;
+  }
+
+  .admin-billing-amount {
+    justify-items: start;
+    text-align: left;
+  }
+}
