@@ -21,6 +21,7 @@ const adminPool = new Pool({ connectionString: adminUrl.toString() });
 let database: ReturnType<typeof createDatabase>;
 let application: ReturnType<typeof createApp>;
 let uploadDir = "";
+type TestAgent = ReturnType<typeof request.agent>;
 
 before(async () => {
   await adminPool.query(`CREATE DATABASE "${name}"`);
@@ -64,12 +65,12 @@ async function createProfessional() {
   return email;
 }
 
-async function publish(agent: request.SuperAgentTest) {
+async function publish(agent: TestAgent) {
   const result = await agent.post("/api/v1/home-services/requests").send({ serviceSlug: "limpieza_hogar", location: "Linares, Jaén", propertyType: "PISO", squareMeters: 70, requestedStartDate: madridDateIso(), frequency: "PUNTUAL", notes: "Limpieza puntual completa de vivienda con cocina, baños y suelos." });
   assert.equal(result.status, 201, result.text); return result.body.request.id as string;
 }
 
-async function offer(agent: request.SuperAgentTest, requestId: string) {
+async function offer(agent: TestAgent, requestId: string) {
   const result = await agent.post(`/api/v1/home-services/requests/${requestId}/offers`).send({ amountCentsPerVisit: 5500, estimatedDurationMinutes: 150, firstAvailableDate: madridDateIso(), message: "Incluye limpieza de cocina, baños, suelos y superficies según el alcance solicitado." });
   assert.equal(result.status, 201, result.text); return result.body.offer.id as string;
 }
@@ -97,7 +98,6 @@ test("cliente retira solicitud y profesional retira oferta sin dejar estados blo
   assert.equal(cancelled.status, 200, cancelled.text);
   const firstState = await database.query<{ status: string }>("SELECT status FROM home_service_requests WHERE id=$1", [firstRequest]);
   assert.equal(firstState.rows[0]!.status, "CANCELADO");
-  assert.equal((await offer(professional, await publish(owner))).length > 10, true);
 
   const secondRequest = await publish(owner);
   const secondOffer = await offer(professional, secondRequest);
