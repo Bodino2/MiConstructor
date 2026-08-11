@@ -1,0 +1,48 @@
+/* Final visual refinements for the homepage card and support control. */
+.botanica-verified-card {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  min-height: 118px;
+  padding: 18px 18px 20px;
+}
+
+.botanica-verified-card > strong {
+  grid-column: 2;
+}
+
+.botanica-verified-card > span:not(.botanica-verified-icon) {
+  grid-column: 2;
+  margin-top: 5px;
+  padding-bottom: 2px;
+}
+
+.botanica-verified-icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  float: none;
+  margin: 1px 0 0;
+}
+
+.support-launcher {
+  min-height: 44px;
+  padding: 12px 18px !important;
+  border-radius: 8px !important;
+  background: #087a55 !important;
+  box-shadow: 0 8px 20px rgba(8, 122, 85, .18);
+  font-weight: 700;
+  line-height: 1.2;
+  transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.support-launcher:hover {
+  background: #006f49 !important;
+  box-shadow: 0 10px 24px rgba(8, 122, 85, .24);
+  transform: translateY(-1px);
+}
+
+.support-launcher:active {
+  transform: translateY(0);
+}
