@@ -1,5 +1,6 @@
 import { databaseError, getD1 } from "@/lib/server/d1";
 import { requireIdentity } from "@/lib/server/identity";
+import { getSpecialtySlugForProjectCategory } from "@/lib/professional-assessment";
 import { cleanText } from "@/lib/validation";
 
 const ALLOWED_CATEGORIES = new Set(["MANO_OBRA", "MATERIALES", "TRANSPORTE", "RESIDUOS", "OTROS"]);
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
   const identity = requireIdentity(request);
   if (identity instanceof Response) return identity;
 
+  let quoteId: number | null = null;
   try {
     const payload = (await request.json()) as {
       proyectoId?: unknown;
@@ -24,6 +26,9 @@ export async function POST(request: Request) {
     const taxRate = Number(payload.ivaPorcentaje);
     if (!Number.isInteger(projectId) || projectId < 1 || !title || !/^\d{4}-\d{2}-\d{2}$/.test(validUntil) || ![0, 10, 21].includes(taxRate) || !Array.isArray(payload.partidas) || payload.partidas.length < 1 || payload.partidas.length > 100) {
       return Response.json({ error: "Proyecto, vigencia, IVA y partidas son obligatorios." }, { status: 400 });
+    }
+    if (validUntil < new Date().toISOString().slice(0, 10)) {
+      return Response.json({ error: "La vigencia del presupuesto no puede estar vencida." }, { status: 400 });
     }
 
     const items = payload.partidas.map((raw, index) => {
@@ -64,11 +69,26 @@ export async function POST(request: Request) {
       return Response.json({ error: "La cuenta profesional debe estar aprobada, domiciliada y al corriente de pago." }, { status: 403 });
     }
     const project = await db
-      .prepare("SELECT status FROM projects WHERE id = ?1")
+      .prepare("SELECT status, category FROM projects WHERE id = ?1")
       .bind(projectId)
-      .first<{ status: string }>();
+      .first<{ status: string; category: string }>();
     if (!project || project.status !== "PUBLICADO") {
       return Response.json({ error: "El proyecto no admite nuevos presupuestos." }, { status: 409 });
+    }
+    const requiredSpecialty = getSpecialtySlugForProjectCategory(project.category);
+    if (!requiredSpecialty) {
+      return Response.json({ error: "El proyecto no tiene una especialidad técnica válida." }, { status: 409 });
+    }
+    const qualification = await db
+      .prepare(
+        `SELECT verification_status
+           FROM professional_specialty_qualifications
+          WHERE professional_email = ?1 AND specialty_slug = ?2`,
+      )
+      .bind(identity, requiredSpecialty)
+      .first<{ verification_status: string }>();
+    if (!qualification || qualification.verification_status !== "APROBADO") {
+      return Response.json({ error: "Debes tener aprobada la especialidad exacta del proyecto." }, { status: 403 });
     }
 
     const now = new Date().toISOString();
@@ -81,7 +101,7 @@ export async function POST(request: Request) {
       )
       .bind(projectId, identity, title, notes, subtotalCents, taxCents, totalCents, validUntil, now)
       .run();
-    const quoteId = Number(created.meta.last_row_id);
+    quoteId = Number(created.meta.last_row_id);
     await db.batch(items.map((item, index) =>
       db.prepare(
         `INSERT INTO structured_quote_items
@@ -90,8 +110,21 @@ export async function POST(request: Request) {
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
       ).bind(quoteId, item.category, item.description, item.quantityMilli, item.unit, item.unitPriceCents, item.totalCents, index),
     ));
-    return Response.json({ success: true, data: { quoteId, subtotalCents, taxCents, totalCents, estado: "ENVIADO" } }, { status: 201 });
+    const completedQuoteId = quoteId;
+    quoteId = null;
+    return Response.json({ success: true, data: { quoteId: completedQuoteId, subtotalCents, taxCents, totalCents, estado: "ENVIADO" } }, { status: 201 });
   } catch (error) {
+    if (quoteId) {
+      try {
+        const db = getD1();
+        await db.batch([
+          db.prepare("DELETE FROM structured_quote_items WHERE quote_id = ?1").bind(quoteId),
+          db.prepare("DELETE FROM structured_quotes WHERE id = ?1").bind(quoteId),
+        ]);
+      } catch {
+        // Preserve the original failure; reconciliation can clean an orphan if storage is unavailable.
+      }
+    }
     if (error instanceof TypeError) return Response.json({ error: error.message }, { status: 400 });
     const message = error instanceof Error ? error.message : "";
     if (message.includes("UNIQUE constraint failed")) {
