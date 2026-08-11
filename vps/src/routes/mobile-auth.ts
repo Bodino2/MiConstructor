@@ -52,7 +52,7 @@ export function mobileAuthRouter(database: Database, config: AppConfig) {
         return response.status(401).json({ error: "Email o contraseña incorrectos." });
       }
       if (!row.email_verified) return response.status(403).json({ error: "Debes verificar tu email antes de entrar." });
-      if (row.account_status === "SUSPENDIDO") return response.status(423).json({ error: "La cuenta está suspendida." });
+      if (row.account_status !== "ACTIVO") return response.status(423).json({ error: "La cuenta no está activa." });
       await database.query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1", [row.id]);
       const token = await createSession(database, config, String(row.id), request);
       await audit(database, {
