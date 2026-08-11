@@ -82,7 +82,20 @@ export type BillingAccount = {
 
 export type BillingSummary = {
   account: BillingAccount | null;
-  invoices: Array<{
+  charges: Array<{
+    id: string;
+    description: string;
+    amount_cents: number | string;
+    status: string;
+    service_date: string;
+    collection_requested_at?: string | null;
+    paid_at?: string | null;
+    failure_reason?: string | null;
+    retry_count: number;
+    project_id: string;
+    project_title: string;
+  }>;
+  legacyInvoices: Array<{
     id: string;
     period_start: string;
     period_end: string;
@@ -90,12 +103,6 @@ export type BillingSummary = {
     status: string;
     failure_reason?: string | null;
     paid_at?: string | null;
-  }>;
-  pendingItems: Array<{
-    id: string;
-    description: string;
-    amount_cents: number | string;
-    service_date: string;
   }>;
 };
 
