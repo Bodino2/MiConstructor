@@ -1,94 +1,240 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import Stripe from "stripe";
 import { z } from "zod";
-import { previousWeeklyPeriod } from "../../../lib/weekly-billing.js";
 import type { AppConfig } from "../config.js";
-import type { Database } from "../db.js";
+import type { Database, DatabaseClient } from "../db.js";
 import { withTransaction } from "../db.js";
 import { audit } from "../services/audit.js";
 import { requireAuth, requireRole } from "../services/auth.js";
 
-function secureEqual(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
+type Queryable = Database | DatabaseClient;
 
 export function stripeClient(config: AppConfig) {
   return config.STRIPE_SECRET_KEY ? new Stripe(config.STRIPE_SECRET_KEY) : null;
 }
 
+async function outstandingBalanceCents(database: Queryable, professionalId: string) {
+  const result = await database.query<{ total: string }>(
+    `SELECT (
+       COALESCE((
+         SELECT sum(total_cents)
+           FROM weekly_invoices
+          WHERE professional_id = $1 AND status = 'FALLIDA'
+       ), 0)
+       +
+       COALESCE((
+         SELECT sum(amount_cents)
+           FROM billable_items
+          WHERE professional_id = $1 AND status = 'FALLIDO' AND invoice_id IS NULL
+       ), 0)
+     )::text AS total`,
+    [professionalId],
+  );
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+async function syncBillingAccountState(database: Queryable, professionalId: string, failureReason?: string) {
+  const total = await outstandingBalanceCents(database, professionalId);
+  if (total > 0) {
+    const reason = (failureReason || "Saldo pendiente por un cargo de selección rechazado.").slice(0, 500);
+    await database.query(
+      `UPDATE billing_accounts
+          SET status = 'SUSPENDIDO_IMPAGO', overdue_balance_cents = $2,
+              suspended_at = COALESCE(suspended_at, now()), suspension_reason = $3, updated_at = now()
+        WHERE professional_id = $1`,
+      [professionalId, total, reason],
+    );
+    await database.query(
+      `UPDATE users
+          SET verification_status = 'SUSPENDIDO',
+              verification_reason = CASE
+                WHEN verification_status = 'SUSPENDIDO'
+                 AND verification_reason IS NOT NULL
+                 AND verification_reason <> 'Cuenta suspendida por saldo pendiente.'
+                THEN verification_reason
+                ELSE 'Cuenta suspendida por saldo pendiente.'
+              END,
+              updated_at = now()
+        WHERE id = $1`,
+      [professionalId],
+    );
+    return total;
+  }
+
+  await database.query(
+    `UPDATE billing_accounts
+        SET status = CASE WHEN stripe_payment_method_id IS NOT NULL THEN 'ACTIVO' ELSE 'PENDIENTE_MANDATO' END,
+            overdue_balance_cents = 0, suspended_at = NULL, suspension_reason = NULL, updated_at = now()
+      WHERE professional_id = $1`,
+    [professionalId],
+  );
+  await database.query(
+    `UPDATE users
+        SET verification_status = CASE
+             WHEN EXISTS (
+               SELECT 1 FROM professional_specialty_qualifications q
+                WHERE q.professional_id = users.id AND q.verification_status = 'APROBADO'
+             ) THEN 'APROBADO' ELSE 'PENDIENTE_REVISION' END,
+            verification_reason = NULL, updated_at = now()
+      WHERE id = $1
+        AND verification_status = 'SUSPENDIDO'
+        AND verification_reason = 'Cuenta suspendida por saldo pendiente.'`,
+    [professionalId],
+  );
+  return 0;
+}
+
 async function suspendForInvoiceFailure(database: Database, invoiceId: string, reason: string) {
   await withTransaction(database, async (client) => {
-    const invoice = await client.query<{ professional_id: string; total_cents: string }>(
+    const invoice = await client.query<{ professional_id: string }>(
       `UPDATE weekly_invoices
           SET status = 'FALLIDA', failure_reason = $2, updated_at = now()
         WHERE id = $1 AND status <> 'PAGADA'
-        RETURNING professional_id, total_cents::text`,
+        RETURNING professional_id`,
       [invoiceId, reason.slice(0, 500)],
     );
     const row = invoice.rows[0];
     if (!row) return;
     await client.query("UPDATE billable_items SET status = 'FALLIDO', updated_at = now() WHERE invoice_id = $1", [invoiceId]);
-    const overdue = await client.query<{ total: string }>(
-      `SELECT COALESCE(sum(total_cents), 0)::text AS total
-         FROM weekly_invoices WHERE professional_id = $1 AND status = 'FALLIDA'`,
-      [row.professional_id],
-    );
-    await client.query(
-      `UPDATE billing_accounts
-          SET status = 'SUSPENDIDO_IMPAGO', overdue_balance_cents = $2,
-              suspended_at = now(), suspension_reason = $3, updated_at = now()
-        WHERE professional_id = $1`,
-      [row.professional_id, overdue.rows[0]?.total ?? row.total_cents, reason.slice(0, 500)],
-    );
-    await client.query(
-      `UPDATE users SET verification_status = 'SUSPENDIDO',
-          verification_reason = 'Cuenta suspendida por saldo pendiente.', updated_at = now()
-        WHERE id = $1`,
-      [row.professional_id],
-    );
-    await audit(client, { action: "BILLING_FAILED_ACCOUNT_SUSPENDED", entityType: "invoice", entityId: invoiceId, metadata: { professionalId: row.professional_id } });
+    await syncBillingAccountState(client, row.professional_id, reason);
+    await audit(client, {
+      action: "BILLING_FAILED_ACCOUNT_SUSPENDED",
+      entityType: "invoice",
+      entityId: invoiceId,
+      metadata: { professionalId: row.professional_id, legacyWeeklyInvoice: true },
+    });
   });
 }
 
 async function markInvoicePaid(database: Database, invoiceId: string) {
   await withTransaction(database, async (client) => {
     const invoice = await client.query<{ professional_id: string }>(
-      `UPDATE weekly_invoices SET status = 'PAGADA', paid_at = now(), failure_reason = NULL, updated_at = now()
+      `UPDATE weekly_invoices
+          SET status = 'PAGADA', paid_at = now(), failure_reason = NULL, updated_at = now()
         WHERE id = $1 RETURNING professional_id`,
       [invoiceId],
     );
     const row = invoice.rows[0];
     if (!row) return;
     await client.query("UPDATE billable_items SET status = 'PAGADO', updated_at = now() WHERE invoice_id = $1", [invoiceId]);
-    const outstanding = await client.query<{ total: string }>(
-      `SELECT COALESCE(sum(total_cents), 0)::text AS total
-         FROM weekly_invoices WHERE professional_id = $1 AND status = 'FALLIDA'`,
-      [row.professional_id],
-    );
-    const total = Number(outstanding.rows[0]?.total ?? 0);
-    if (total === 0) {
-      await client.query(
-        `UPDATE billing_accounts SET status = 'ACTIVO', overdue_balance_cents = 0,
-             suspended_at = NULL, suspension_reason = NULL, updated_at = now()
-          WHERE professional_id = $1 AND stripe_payment_method_id IS NOT NULL`,
-        [row.professional_id],
-      );
-      await client.query(
-        `UPDATE users SET verification_status = CASE
-             WHEN EXISTS (SELECT 1 FROM professional_specialty_qualifications q
-                           WHERE q.professional_id = users.id AND q.verification_status = 'APROBADO')
-             THEN 'APROBADO' ELSE 'PENDIENTE_REVISION' END,
-             verification_reason = NULL, updated_at = now()
-          WHERE id = $1 AND verification_status = 'SUSPENDIDO'`,
-        [row.professional_id],
-      );
-    } else {
-      await client.query("UPDATE billing_accounts SET overdue_balance_cents = $2, updated_at = now() WHERE professional_id = $1", [row.professional_id, total]);
-    }
+    await syncBillingAccountState(client, row.professional_id);
   });
+}
+
+export async function failSelectionCharge(database: Database, chargeId: string, reason: string) {
+  await withTransaction(database, async (client) => {
+    const charge = await client.query<{ professional_id: string; shortlist_id: string }>(
+      `UPDATE billable_items
+          SET status = 'FALLIDO', failure_reason = $2, updated_at = now()
+        WHERE id = $1 AND invoice_id IS NULL AND status <> 'PAGADO'
+        RETURNING professional_id, shortlist_id`,
+      [chargeId, reason.slice(0, 500)],
+    );
+    const row = charge.rows[0];
+    if (!row) return;
+    await syncBillingAccountState(client, row.professional_id, reason);
+    await audit(client, {
+      action: "SELECTION_CHARGE_FAILED",
+      entityType: "selection_charge",
+      entityId: chargeId,
+      metadata: { professionalId: row.professional_id, shortlistId: row.shortlist_id },
+    });
+  });
+}
+
+export async function markSelectionChargePaid(database: Database, chargeId: string) {
+  await withTransaction(database, async (client) => {
+    const charge = await client.query<{ professional_id: string; shortlist_id: string }>(
+      `UPDATE billable_items
+          SET status = 'PAGADO', paid_at = COALESCE(paid_at, now()), failure_reason = NULL, updated_at = now()
+        WHERE id = $1 AND invoice_id IS NULL
+        RETURNING professional_id, shortlist_id`,
+      [chargeId],
+    );
+    const row = charge.rows[0];
+    if (!row) return;
+    await syncBillingAccountState(client, row.professional_id);
+    await audit(client, {
+      action: "SELECTION_CHARGE_PAID",
+      entityType: "selection_charge",
+      entityId: chargeId,
+      metadata: { professionalId: row.professional_id, shortlistId: row.shortlist_id },
+    });
+  });
+}
+
+export type ImmediateSelectionCharge = {
+  chargeId: string;
+  shortlistId: string;
+  professionalId: string;
+  amountCents: number;
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  attempt?: number;
+};
+
+export async function collectSelectionCharge(
+  database: Database,
+  stripe: Stripe | null,
+  charge: ImmediateSelectionCharge,
+) {
+  if (!stripe) return { status: "PENDIENTE" as const, paymentIntentId: null };
+
+  try {
+    const attempt = charge.attempt ?? 0;
+    const intent = await stripe.paymentIntents.create({
+      amount: charge.amountCents,
+      currency: "eur",
+      customer: charge.stripeCustomerId,
+      payment_method: charge.stripePaymentMethodId,
+      payment_method_types: ["sepa_debit"],
+      confirm: true,
+      off_session: true,
+      description: "MiConstructor · selección de profesional",
+      metadata: {
+        selection_charge_id: charge.chargeId,
+        shortlist_id: charge.shortlistId,
+        professional_id: charge.professionalId,
+      },
+    }, { idempotencyKey: `miconstructor-selection-${charge.chargeId}-attempt-${attempt}` });
+
+    if (["requires_payment_method", "requires_action", "canceled"].includes(intent.status)) {
+      const reason = intent.last_payment_error?.message || `Stripe devolvió estado ${intent.status}`;
+      await failSelectionCharge(database, charge.chargeId, reason);
+      return { status: "FALLIDO" as const, paymentIntentId: intent.id };
+    }
+
+    await database.query(
+      `UPDATE billable_items
+          SET status = 'PROCESANDO', stripe_payment_intent_id = $2,
+              collection_requested_at = COALESCE(collection_requested_at, now()),
+              failure_reason = NULL, updated_at = now()
+        WHERE id = $1 AND invoice_id IS NULL AND status IN ('PENDIENTE','PROCESANDO')`,
+      [charge.chargeId, intent.id],
+    );
+
+    if (intent.status === "succeeded") {
+      await markSelectionChargePaid(database, charge.chargeId);
+      return { status: "PAGADO" as const, paymentIntentId: intent.id };
+    }
+
+    await audit(database, {
+      action: "SELECTION_CHARGE_REQUESTED",
+      entityType: "selection_charge",
+      entityId: charge.chargeId,
+      metadata: {
+        professionalId: charge.professionalId,
+        shortlistId: charge.shortlistId,
+        stripePaymentIntentId: intent.id,
+        attempt,
+      },
+    });
+    return { status: "PROCESANDO" as const, paymentIntentId: intent.id };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Cobro rechazado";
+    await failSelectionCharge(database, charge.chargeId, reason);
+    return { status: "FALLIDO" as const, paymentIntentId: null };
+  }
 }
 
 export function billingRouter(database: Database, config: AppConfig, stripe = stripeClient(config)) {
@@ -102,17 +248,27 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
            FROM billing_accounts WHERE professional_id = $1`,
         [request.user!.id],
       );
-      const invoices = await database.query(
+      const charges = await database.query(
+        `SELECT bi.id, bi.description, bi.amount_cents, bi.status, bi.service_date,
+                bi.collection_requested_at, bi.paid_at, bi.failure_reason, bi.retry_count,
+                s.project_id, p.title AS project_title
+           FROM billable_items bi
+           JOIN shortlists s ON s.id = bi.shortlist_id
+           JOIN projects p ON p.id = s.project_id
+          WHERE bi.professional_id = $1 AND bi.invoice_id IS NULL
+          ORDER BY bi.service_date DESC LIMIT 100`,
+        [request.user!.id],
+      );
+      const legacyInvoices = await database.query(
         `SELECT id, period_start, period_end, total_cents, status, failure_reason, paid_at
            FROM weekly_invoices WHERE professional_id = $1 ORDER BY period_end DESC LIMIT 52`,
         [request.user!.id],
       );
-      const pending = await database.query(
-        `SELECT id, description, amount_cents, service_date
-           FROM billable_items WHERE professional_id = $1 AND status = 'PENDIENTE' ORDER BY service_date`,
-        [request.user!.id],
-      );
-      response.json({ account: account.rows[0] ?? null, invoices: invoices.rows, pendingItems: pending.rows });
+      response.json({
+        account: account.rows[0] ?? null,
+        charges: charges.rows,
+        legacyInvoices: legacyInvoices.rows,
+      });
     } catch (error) { next(error); }
   });
 
@@ -131,7 +287,10 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
           metadata: { miconstructor_user_id: request.user!.id },
         }, { idempotencyKey: `customer-${request.user!.id}` });
         customerId = customer.id;
-        await database.query("UPDATE billing_accounts SET stripe_customer_id = $2, updated_at = now() WHERE professional_id = $1", [request.user!.id, customerId]);
+        await database.query(
+          "UPDATE billing_accounts SET stripe_customer_id = $2, updated_at = now() WHERE professional_id = $1",
+          [request.user!.id, customerId],
+        );
       }
       const setupIntent = await stripe.setupIntents.create({
         customer: customerId,
@@ -143,6 +302,57 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
     } catch (error) { next(error); }
   });
 
+  router.post("/billing/charges/:id/retry", requireAuth, requireRole("profesional"), async (request, response, next) => {
+    try {
+      if (!stripe) return response.status(503).json({ error: "Stripe todavía no está configurado." });
+      const parsedChargeId = z.string().uuid().safeParse(request.params.id);
+      if (!parsedChargeId.success) return response.status(400).json({ error: "Cargo no válido." });
+      const charge = await withTransaction(database, async (client) => {
+        const current = await client.query<{
+          id: string;
+          shortlist_id: string;
+          amount_cents: string;
+          professional_id: string;
+          retry_count: number;
+          stripe_customer_id: string;
+          stripe_payment_method_id: string;
+        }>(
+          `SELECT bi.id, bi.shortlist_id, bi.amount_cents::text, bi.professional_id, bi.retry_count,
+                  b.stripe_customer_id, b.stripe_payment_method_id
+             FROM billable_items bi
+             JOIN billing_accounts b ON b.professional_id = bi.professional_id
+            WHERE bi.id = $1 AND bi.professional_id = $2 AND bi.invoice_id IS NULL
+              AND bi.status = 'FALLIDO'
+              AND b.stripe_customer_id IS NOT NULL AND b.stripe_payment_method_id IS NOT NULL
+            FOR UPDATE OF bi`,
+          [parsedChargeId.data, request.user!.id],
+        );
+        const row = current.rows[0];
+        if (!row) return null;
+        const retryCount = row.retry_count + 1;
+        await client.query(
+          `UPDATE billable_items
+              SET status = 'PENDIENTE', retry_count = $2, failure_reason = NULL, updated_at = now()
+            WHERE id = $1`,
+          [row.id, retryCount],
+        );
+        return {
+          chargeId: row.id,
+          shortlistId: row.shortlist_id,
+          professionalId: row.professional_id,
+          amountCents: Number(row.amount_cents),
+          stripeCustomerId: row.stripe_customer_id,
+          stripePaymentMethodId: row.stripe_payment_method_id,
+          attempt: retryCount,
+        } satisfies ImmediateSelectionCharge;
+      });
+      if (!charge) return response.status(404).json({ error: "Cargo pendiente no encontrado." });
+      const result = await collectSelectionCharge(database, stripe, charge);
+      response.json({ success: true, status: result.status });
+    } catch (error) { next(error); }
+  });
+
+  // Compatibilidad de cobro para facturas históricas creadas antes del cambio de modelo.
   router.post("/billing/invoices/:id/retry", requireAuth, requireRole("profesional"), async (request, response, next) => {
     try {
       if (!stripe) return response.status(503).json({ error: "Stripe todavía no está configurado." });
@@ -162,7 +372,7 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
         [invoiceId, request.user!.id],
       );
       const row = invoice.rows[0];
-      if (!row) return response.status(404).json({ error: "Factura pendiente no encontrada." });
+      if (!row) return response.status(404).json({ error: "Factura histórica pendiente no encontrada." });
       const intent = await stripe.paymentIntents.create({
         amount: Number(row.total_cents),
         currency: "eur",
@@ -171,82 +381,25 @@ export function billingRouter(database: Database, config: AppConfig, stripe = st
         payment_method_types: ["sepa_debit"],
         confirm: true,
         off_session: true,
-        description: "MiConstructor · recuperación de saldo pendiente",
+        description: "MiConstructor · recuperación de saldo histórico",
         metadata: { invoice_id: invoiceId, professional_id: request.user!.id },
-      }, { idempotencyKey: `miconstructor-retry-${invoiceId}-${Date.now().toString().slice(0, 8)}` });
+      }, { idempotencyKey: `miconstructor-legacy-retry-${invoiceId}-${Date.now().toString().slice(0, 10)}` });
       await database.query(
-        `UPDATE weekly_invoices SET status = 'PROCESANDO', stripe_payment_intent_id = $2,
-            collection_requested_at = now(), failure_reason = NULL, updated_at = now() WHERE id = $1`,
+        `UPDATE weekly_invoices
+            SET status = 'PROCESANDO', stripe_payment_intent_id = $2,
+                collection_requested_at = now(), failure_reason = NULL, updated_at = now()
+          WHERE id = $1`,
         [invoiceId, intent.id],
       );
       response.json({ success: true, status: "PROCESANDO" });
     } catch (error) { next(error); }
   });
 
-  router.post("/jobs/weekly-billing", async (request, response, next) => {
-    try {
-      const secret = request.get("x-miconstructor-job-secret") ?? "";
-      if (!secureEqual(secret, config.BILLING_JOB_SECRET)) return response.status(401).json({ error: "No autorizado." });
-      if (!stripe) return response.status(503).json({ error: "Stripe todavía no está configurado." });
-      const period = previousWeeklyPeriod(new Date());
-      const accounts = await database.query<{ professional_id: string; stripe_customer_id: string; stripe_payment_method_id: string }>(
-        `SELECT professional_id, stripe_customer_id, stripe_payment_method_id
-           FROM billing_accounts
-          WHERE status = 'ACTIVO' AND stripe_customer_id IS NOT NULL AND stripe_payment_method_id IS NOT NULL`,
-      );
-      const created: string[] = [];
-      for (const account of accounts.rows) {
-        const invoice = await withTransaction(database, async (client) => {
-          const existing = await client.query<{ id: string }>(
-            "SELECT id FROM weekly_invoices WHERE professional_id = $1 AND period_start = $2 AND period_end = $3",
-            [account.professional_id, period.start, period.end],
-          );
-          if (existing.rows[0]) return null;
-          const items = await client.query<{ id: string; amount_cents: string }>(
-            `SELECT id, amount_cents::text FROM billable_items
-              WHERE professional_id = $1 AND status = 'PENDIENTE' AND service_date >= $2 AND service_date < $3
-              ORDER BY service_date FOR UPDATE`,
-            [account.professional_id, period.start, period.end],
-          );
-          const total = items.rows.reduce((sum, item) => sum + Number(item.amount_cents), 0);
-          if (total <= 0) return null;
-          const invoiceId = randomUUID();
-          await client.query(
-            `INSERT INTO weekly_invoices
-              (id, professional_id, period_start, period_end, total_cents, status, collection_requested_at)
-             VALUES ($1, $2, $3, $4, $5, 'PENDIENTE_COBRO', now())`,
-            [invoiceId, account.professional_id, period.start, period.end, total],
-          );
-          await client.query(
-            "UPDATE billable_items SET invoice_id = $1, status = 'FACTURADO', updated_at = now() WHERE id = ANY($2::uuid[])",
-            [invoiceId, items.rows.map((item) => item.id)],
-          );
-          return { id: invoiceId, total };
-        });
-        if (!invoice) continue;
-        try {
-          const intent = await stripe.paymentIntents.create({
-            amount: invoice.total,
-            currency: "eur",
-            customer: account.stripe_customer_id,
-            payment_method: account.stripe_payment_method_id,
-            payment_method_types: ["sepa_debit"],
-            confirm: true,
-            off_session: true,
-            description: `MiConstructor · servicios ${period.start.slice(0, 10)}–${period.end.slice(0, 10)}`,
-            metadata: { invoice_id: invoice.id, professional_id: account.professional_id },
-          }, { idempotencyKey: `miconstructor-weekly-${invoice.id}` });
-          await database.query(
-            "UPDATE weekly_invoices SET status = 'PROCESANDO', stripe_payment_intent_id = $2, updated_at = now() WHERE id = $1",
-            [invoice.id, intent.id],
-          );
-          created.push(invoice.id);
-        } catch (error) {
-          await suspendForInvoiceFailure(database, invoice.id, error instanceof Error ? error.message : "Cobro rechazado");
-        }
-      }
-      response.json({ success: true, invoicesCreated: created.length });
-    } catch (error) { next(error); }
+  router.post("/jobs/weekly-billing", (_request, response) => {
+    response.status(410).json({
+      error: "La facturación semanal está desactivada. Cada profesional seleccionado se cobra automáticamente en el momento de la selección.",
+      billingMode: "IMMEDIATE_PER_SELECTION",
+    });
   });
 
   return router;
@@ -278,8 +431,10 @@ export function stripeWebhookHandler(database: Database, config: AppConfig, stri
         const mandate = typeof intent.mandate === "string" ? intent.mandate : intent.mandate?.id;
         if (professionalId && paymentMethodId && customerId) {
           await database.query(
-            `UPDATE billing_accounts SET status = CASE WHEN overdue_balance_cents > 0 THEN 'SUSPENDIDO_IMPAGO' ELSE 'ACTIVO' END,
-                stripe_customer_id = $2, stripe_payment_method_id = $3, sepa_mandate_reference = $4, updated_at = now()
+            `UPDATE billing_accounts
+                SET status = CASE WHEN overdue_balance_cents > 0 THEN 'SUSPENDIDO_IMPAGO' ELSE 'ACTIVO' END,
+                    stripe_customer_id = $2, stripe_payment_method_id = $3,
+                    sepa_mandate_reference = $4, updated_at = now()
               WHERE professional_id = $1`,
             [professionalId, customerId, paymentMethodId, mandate ?? null],
           );
@@ -287,18 +442,28 @@ export function stripeWebhookHandler(database: Database, config: AppConfig, stri
       }
       if (event.type === "payment_intent.succeeded") {
         const intent = event.data.object as Stripe.PaymentIntent;
-        if (intent.metadata.invoice_id) await markInvoicePaid(database, intent.metadata.invoice_id);
+        if (intent.metadata.selection_charge_id) {
+          await markSelectionChargePaid(database, intent.metadata.selection_charge_id);
+        } else if (intent.metadata.invoice_id) {
+          await markInvoicePaid(database, intent.metadata.invoice_id);
+        }
       }
       if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {
         const intent = event.data.object as Stripe.PaymentIntent;
-        if (intent.metadata.invoice_id) {
-          await suspendForInvoiceFailure(database, intent.metadata.invoice_id, intent.last_payment_error?.message ?? "Adeudo rechazado");
+        const reason = intent.last_payment_error?.message ?? "Adeudo rechazado";
+        if (intent.metadata.selection_charge_id) {
+          await failSelectionCharge(database, intent.metadata.selection_charge_id, reason);
+        } else if (intent.metadata.invoice_id) {
+          await suspendForInvoiceFailure(database, intent.metadata.invoice_id, reason);
         }
       }
       await database.query("UPDATE stripe_webhook_events SET processed_at = now() WHERE event_id = $1", [event.id]);
       response.json({ received: true });
     } catch (error) {
-      await database.query("UPDATE stripe_webhook_events SET processing_error = $2 WHERE event_id = $1", [event.id, error instanceof Error ? error.message.slice(0, 500) : "Error"]);
+      await database.query(
+        "UPDATE stripe_webhook_events SET processing_error = $2 WHERE event_id = $1",
+        [event.id, error instanceof Error ? error.message.slice(0, 500) : "Error"],
+      );
       response.status(500).send("Error procesando webhook");
     }
   };
