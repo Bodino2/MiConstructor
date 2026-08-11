@@ -19,12 +19,12 @@ function contrast(hexA: string, hexB: string) {
   return (bright! + .05) / (dark! + .05);
 }
 
-test("Botanica Industrial se carga al final del shell y su JavaScript es válido", async () => {
+test("Botanica Industrial y servicios del hogar se cargan al final del shell", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(homeUrl)], { stdio: "pipe" });
   const index = await readFile(indexUrl, "utf8");
-  assert.match(index, /site-shell\.css[\s\S]*botanica-industrial\.css/);
-  assert.match(index, /registration-portals\.js[\s\S]*botanica-home\.js/);
-  assert.match(index, /MiConstructor \| Reformas con claridad/);
+  assert.match(index, /site-shell\.css[\s\S]*botanica-industrial\.css[\s\S]*home-services-ui\.css/);
+  assert.match(index, /registration-portals\.js[\s\S]*botanica-home\.js[\s\S]*home-services-ui\.js/);
+  assert.match(index, /MiConstructor \| Reformas y cuidado del hogar/);
 });
 
 test("el sistema visual usa Obsidian, hormigón y Malachite con CTA accesible", async () => {
@@ -44,10 +44,14 @@ test("cookies permanecen compactas y la configuración avanzada respeta hidden",
   assert.match(css, /max-height:\s*68vh/);
 });
 
-test("la portada separa clientes y profesionales y no inventa métricas comerciales", async () => {
+test("la portada separa usuarios, expone las tres verticales y no inventa métricas", async () => {
   const home = await readFile(homeUrl, "utf8");
   assert.match(home, /Para clientes/);
   assert.match(home, /Para profesionales/);
+  assert.match(home, /Reformas y construcción/);
+  assert.match(home, /Limpieza y mantenimiento/);
+  assert.match(home, /Jardín y exterior/);
+  assert.match(home, /\/servicios-hogar/);
   assert.match(home, /Cómo funciona/);
   assert.match(home, /Profesionales verificados/);
   assert.match(home, /\/api\/v1\/public\/professionals\?limit=5/);
