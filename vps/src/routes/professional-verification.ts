@@ -22,7 +22,6 @@ const qualificationDecisionSchema = z.object({
 });
 
 type Queryable = Pick<Database, "query"> | Pick<DatabaseClient, "query">;
-
 type PersistedFile = StoredFile & { id: string };
 
 function verificationUploader(config: AppConfig) {
@@ -251,16 +250,24 @@ export function professionalVerificationRouter(database: Database, config: AppCo
         const qualificationStatus = { APROBAR: "APROBADO", RECHAZAR: "RECHAZADO", SUSPENDER: "SUSPENDIDO" }[body.data.decision];
 
         const result = await withTransaction(database, async (client) => {
-          const updated = await client.query<{ professional_id: string }>(
+          const current = await client.query<{ professional_id: string; verification_status: string }>(
+            `SELECT professional_id, verification_status
+               FROM professional_specialty_qualifications
+              WHERE id = $1
+              FOR UPDATE`,
+            [id.data],
+          );
+          const existing = current.rows[0];
+          if (!existing) return null;
+          const wasSuspended = existing.verification_status === "SUSPENDIDO";
+
+          await client.query(
             `UPDATE professional_specialty_qualifications
                 SET verification_status = $2, reviewed_at = now(), reviewed_by = $3,
                     review_reason = $4, updated_at = now()
-              WHERE id = $1
-              RETURNING professional_id`,
+              WHERE id = $1`,
             [id.data, qualificationStatus, request.user!.id, body.data.reason],
           );
-          const row = updated.rows[0];
-          if (!row) return null;
 
           let readiness;
           if (qualificationStatus === "SUSPENDIDO") {
@@ -268,11 +275,16 @@ export function professionalVerificationRouter(database: Database, config: AppCo
               `UPDATE users
                   SET verification_status = 'SUSPENDIDO', verification_reason = $2, updated_at = now()
                 WHERE id = $1`,
-              [row.professional_id, body.data.reason],
+              [existing.professional_id, body.data.reason],
             );
-            readiness = { ...(await verificationReadiness(client, row.professional_id)), approved: false };
+            readiness = { ...(await verificationReadiness(client, existing.professional_id)), approved: false };
           } else {
-            readiness = await refreshProfessionalStatus(client, row.professional_id, false);
+            const explicitlyReapprovingSuspendedQualification = qualificationStatus === "APROBADO" && wasSuspended;
+            readiness = await refreshProfessionalStatus(
+              client,
+              existing.professional_id,
+              !explicitlyReapprovingSuspendedQualification,
+            );
           }
 
           await audit(client, {
@@ -281,7 +293,7 @@ export function professionalVerificationRouter(database: Database, config: AppCo
             entityType: "qualification",
             entityId: id.data,
             ip: request.ip,
-            metadata: { reason: body.data.reason },
+            metadata: { reason: body.data.reason, previousStatus: existing.verification_status },
           });
           return readiness;
         });
