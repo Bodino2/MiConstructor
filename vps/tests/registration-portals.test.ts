@@ -7,6 +7,7 @@ import test from "node:test";
 const scriptUrl = new URL("../public/registration-portals.js", import.meta.url);
 const cssUrl = new URL("../public/registration-portals.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
+const appUrl = new URL("../src/app.ts", import.meta.url);
 
 async function source() {
   return readFile(scriptUrl, "utf8");
@@ -27,6 +28,13 @@ test("clientes y profesionales tienen entradas y rutas separadas", async () => {
   assert.match(js, />Para profesionales</);
   assert.match(js, />Crear cuenta</);
   assert.doesNotMatch(js, /Tipo de cuenta<select/);
+});
+
+test("las rutas separadas funcionan también con acceso directo o refresh", async () => {
+  const app = await readFile(appUrl, "utf8");
+  assert.match(app, /"\/registro-cliente"/);
+  assert.match(app, /"\/para-profesionales"/);
+  assert.match(app, /"\/registro-profesional"/);
 });
 
 test("el alta de cliente fija el rol y no pide campos profesionales", async () => {
