@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { API_BASE_URL, billing as loadBilling, projects as loadProjects, submitProposal } from "../api";
+import { API_BASE_URL, billing as loadBilling, projects as loadProjects, retrySelectionCharge, submitProposal } from "../api";
 import { colors } from "../theme";
 import type { BillingSummary, Project } from "../types";
 import { ActionButton, Badge, Card, Empty, ErrorNotice, Field, Loading, Metric, SectionTitle, money, shortDate } from "../ui";
@@ -92,6 +92,7 @@ export function ProfessionalBillingScreen() {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -105,6 +106,20 @@ export function ProfessionalBillingScreen() {
     }
   }
 
+  async function retryCharge(id: string) {
+    setRetrying(id);
+    setError("");
+    try {
+      await retrySelectionCharge(id);
+      Alert.alert("Cobro reenviado", "El estado se actualizará automáticamente cuando Stripe confirme el adeudo.");
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No se ha podido reenviar el cobro.");
+    } finally {
+      setRetrying(null);
+    }
+  }
+
   useEffect(() => { void refresh(); }, []);
 
   if (loading) return <Loading label="Cargando facturación…" />;
@@ -113,18 +128,37 @@ export function ProfessionalBillingScreen() {
 
   return (
     <View style={styles.wrap}>
-      <SectionTitle eyebrow="FACTURACIÓN" title="Cuenta profesional" detail="Seguimiento de domiciliación, conceptos pendientes y facturas." />
+      <SectionTitle eyebrow="FACTURACIÓN" title="Cuenta profesional" detail="Solo se genera un cargo cuando un cliente te selecciona. No existe facturación semanal para las nuevas selecciones." />
       {error ? <ErrorNotice message={error} /> : null}
       <Card>
         <View style={styles.rowBetween}><Text style={styles.title}>Domiciliación SEPA</Text><Badge value={account?.status || "PENDIENTE_MANDATO"} /></View>
         <Metric label="Saldo vencido" value={money(account?.overdue_balance_cents)} />
-        <Text style={styles.description}>La activación y firma del mandato SEPA se completa en el entorno seguro de MiConstructor. La app mostrará automáticamente el estado confirmado por Stripe.</Text>
+        <Text style={styles.description}>El mandato permite cobrar automáticamente el importe correspondiente en el momento en que un cliente te selecciona. Si no eres seleccionado, no se genera ningún cargo.</Text>
         {account?.status === "PENDIENTE_MANDATO" ? <ActionButton label="Configurar SEPA" onPress={() => void Linking.openURL(`${API_BASE_URL}/panel`)} /> : null}
       </Card>
-      <SectionTitle title="Conceptos pendientes" />
-      {!summary.pendingItems.length ? <Empty title="Sin conceptos pendientes" /> : summary.pendingItems.map((item) => <Card key={item.id}><Metric label={`${item.description} · ${shortDate(item.service_date)}`} value={money(item.amount_cents)} /></Card>)}
-      <SectionTitle title="Facturas" />
-      {!summary.invoices.length ? <Empty title="Todavía no hay facturas" /> : summary.invoices.map((invoice) => <Card key={invoice.id}><View style={styles.rowBetween}><Text style={styles.meta}>{shortDate(invoice.period_start)} – {shortDate(invoice.period_end)}</Text><Badge value={invoice.status} /></View><Text style={styles.amount}>{money(invoice.total_cents)}</Text>{invoice.failure_reason ? <Text style={styles.failure}>{invoice.failure_reason}</Text> : null}</Card>)}
+
+      <SectionTitle title="Cargos por selección" />
+      {!summary.charges.length ? <Empty title="Todavía no tienes cargos" detail="Enviar propuestas no genera ningún coste. El cargo aparece únicamente cuando un cliente te selecciona." /> : summary.charges.map((charge) => (
+        <Card key={charge.id}>
+          <View style={styles.rowBetween}><Text style={styles.meta}>{charge.project_title} · {shortDate(charge.service_date)}</Text><Badge value={charge.status} /></View>
+          <Text style={styles.amount}>{money(charge.amount_cents)}</Text>
+          {charge.failure_reason ? <Text style={styles.failure}>{charge.failure_reason}</Text> : null}
+          {charge.status === "FALLIDO" ? <ActionButton label={retrying === charge.id ? "Reintentando…" : "Reintentar cobro"} disabled={retrying === charge.id} onPress={() => void retryCharge(charge.id)} /> : null}
+        </Card>
+      ))}
+
+      {summary.legacyInvoices.length ? (
+        <>
+          <SectionTitle title="Facturación histórica" detail="Facturas semanales generadas antes del cambio al cobro inmediato por selección." />
+          {summary.legacyInvoices.map((invoice) => (
+            <Card key={invoice.id}>
+              <View style={styles.rowBetween}><Text style={styles.meta}>{shortDate(invoice.period_start)} – {shortDate(invoice.period_end)}</Text><Badge value={invoice.status} /></View>
+              <Text style={styles.amount}>{money(invoice.total_cents)}</Text>
+              {invoice.failure_reason ? <Text style={styles.failure}>{invoice.failure_reason}</Text> : null}
+            </Card>
+          ))}
+        </>
+      ) : null}
       <ActionButton label="Actualizar" variant="ghost" onPress={() => void refresh()} />
     </View>
   );
