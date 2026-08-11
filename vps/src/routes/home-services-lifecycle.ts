@@ -5,8 +5,56 @@ import { withTransaction } from "../db.js";
 import { audit } from "../services/audit.js";
 import { requireAuth, requireRole } from "../services/auth.js";
 
+const privateDetailsSchema = z.object({
+  serviceAddress: z.string().trim().min(5).max(300),
+  accessNotes: z.string().trim().max(1000).default(""),
+});
+
 export function homeServicesLifecycleRouter(database: Database) {
   const router = Router();
+
+  router.put("/home-services/requests/:id/private-details", requireAuth, requireRole("cliente"), async (request, response, next) => {
+    try {
+      const id = z.string().uuid().safeParse(request.params.id);
+      const parsed = privateDetailsSchema.safeParse(request.body);
+      if (!id.success || !parsed.success) return response.status(400).json({ error: id.success ? parsed.error?.issues[0]?.message : "Solicitud no válida." });
+      const result = await database.query<{ id: string; status: string }>(
+        `UPDATE home_service_requests
+            SET service_address=$3, access_notes=$4, updated_at=now()
+          WHERE id=$1 AND client_id=$2 AND status IN ('PUBLICADO','ASIGNADO')
+          RETURNING id,status`,
+        [id.data, request.user!.id, parsed.data.serviceAddress, parsed.data.accessNotes],
+      );
+      if (!result.rows[0]) return response.status(404).json({ error: "Solicitud no encontrada o ya cerrada." });
+      await audit(database, { actorUserId: request.user!.id, action: "HOME_SERVICE_PRIVATE_DETAILS_UPDATED", entityType: "home_service_request", entityId: id.data, ip: request.ip, metadata: { hasAccessNotes: Boolean(parsed.data.accessNotes) } });
+      response.json({ success: true, privateDetailsReady: true });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/home-services/engagements/private-details", requireAuth, async (request, response, next) => {
+    try {
+      const result = await database.query(
+        `SELECT e.id AS engagement_id, e.request_id, e.status,
+                r.service_address, r.access_notes, r.location
+           FROM home_service_engagements e
+           JOIN home_service_requests r ON r.id=e.request_id
+          WHERE ($2='admin') OR e.client_id=$1 OR e.professional_id=$1
+          ORDER BY e.created_at DESC
+          LIMIT 100`,
+        [request.user!.id, request.user!.role],
+      );
+      response.json({
+        privateDetails: result.rows.map((row) => ({
+          engagementId: row.engagement_id,
+          requestId: row.request_id,
+          status: row.status,
+          zone: row.location,
+          serviceAddress: row.service_address,
+          accessNotes: row.access_notes,
+        })),
+      });
+    } catch (error) { next(error); }
+  });
 
   router.post("/home-services/requests/:id/cancel", requireAuth, requireRole("cliente"), async (request, response, next) => {
     try {
