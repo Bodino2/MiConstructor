@@ -49,6 +49,32 @@ async function verify(email: string) {
   assert.equal(verified.status, 200, verified.text);
 }
 
+async function approveProfessional(professionalId: string) {
+  await database.query(
+    "UPDATE professional_specialty_qualifications SET verification_status='APROBADO', reviewed_at=now() WHERE professional_id=$1",
+    [professionalId],
+  );
+  const identityFileId = randomUUID();
+  const taxFileId = randomUUID();
+  await database.query(
+    `INSERT INTO stored_files
+      (id, owner_id, purpose, object_key, original_name, content_type, size_bytes, sha256, moderation_status)
+     VALUES
+      ($1, $3, 'VERIFICACION_PROFESIONAL', $4, 'identidad.pdf', 'application/pdf', 1, $6, 'APROBADO'),
+      ($2, $3, 'VERIFICACION_PROFESIONAL', $5, 'situacion-fiscal.pdf', 'application/pdf', 1, $6, 'APROBADO')`,
+    [identityFileId, taxFileId, professionalId, `tests/${identityFileId}`, `tests/${taxFileId}`, "a".repeat(64)],
+  );
+  await database.query(
+    `INSERT INTO professional_verification_documents
+      (id, professional_id, file_id, document_type, status, reviewed_at)
+     VALUES
+      ($1, $3, $4, 'IDENTIDAD', 'APROBADO', now()),
+      ($2, $3, $5, 'SITUACION_FISCAL', 'APROBADO', now())`,
+    [randomUUID(), randomUUID(), professionalId, identityFileId, taxFileId],
+  );
+  await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [professionalId]);
+}
+
 async function createClient(email: string, taxId: string) {
   const result = await request(application).post("/api/v1/auth/register").send({ name: email, email, password: "Password-Seguro-2026", role: "cliente", taxId, privacyAccepted: true, termsAccepted: true });
   assert.equal(result.status, 201, result.text); await verify(email);
@@ -65,8 +91,7 @@ async function createProfessional() {
   assert.equal(result.status, 201, result.text); await verify(email);
   const user = await database.query<{ id: string }>("SELECT id FROM users WHERE email=$1", [email]);
   const id = user.rows[0]!.id;
-  await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [id]);
-  await database.query("UPDATE professional_specialty_qualifications SET verification_status='APROBADO' WHERE professional_id=$1", [id]);
+  await approveProfessional(id);
   const agent = request.agent(application);
   assert.equal((await agent.post("/api/v1/auth/login").send({ email, password: "Password-Seguro-2026" })).status, 200);
   return { agent, id };

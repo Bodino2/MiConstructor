@@ -8,7 +8,7 @@ const adapterUrl = new URL("../public/selection-billing-ui.js", import.meta.url)
 const indexUrl = new URL("../public/index.html", import.meta.url);
 const billingRouteUrl = new URL("../src/routes/billing.ts", import.meta.url);
 const marketplaceRouteUrl = new URL("../src/routes/marketplace.ts", import.meta.url);
-const migrationUrl = new URL("../migrations/006_immediate_selection_billing.sql", import.meta.url);
+const migrationUrl = new URL("../migrations/009_immediate_selection_billing.sql", import.meta.url);
 const legacyWeeklyUrl = new URL("../../app/api/v1/facturacion/semanal/route.ts", import.meta.url);
 const legacyShortlistUrl = new URL("../../app/api/v1/proyectos/[id]/shortlist/route.ts", import.meta.url);
 
@@ -54,7 +54,7 @@ test("los endpoints Next heredados no pueden reactivar shortlist o facturación 
   assert.doesNotMatch(shortlist, /PENDIENTE_FACTURA|SEMANAL_DIRECT_DEBIT|professional_billable_items/);
 });
 
-test("migración 006 conserva invoice_id solo como histórico y añade PaymentIntent por selección", async () => {
+test("migración 009 conserva invoice_id solo como histórico y añade PaymentIntent por selección", async () => {
   const migration = await readFile(migrationUrl, "utf8");
   assert.match(migration, /stripe_payment_intent_id text UNIQUE/);
   assert.match(migration, /collection_requested_at/);

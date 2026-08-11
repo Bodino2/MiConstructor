@@ -9,7 +9,7 @@ import {
   locationFit,
 } from "../src/services/professional-ranking.js";
 
-const migrationPath = new URL("../migrations/004_operating_system_core.sql", import.meta.url);
+const migrationPath = new URL("../migrations/007_operating_system_core.sql", import.meta.url);
 const routePath = new URL("../src/routes/operating-system.ts", import.meta.url);
 
 test("MiConstructor Verified Score rewards only verified evidence", () => {
@@ -77,13 +77,14 @@ test("smart matching considers location, availability and real capacity", () => 
   assert.equal(busy, 84);
 });
 
-test("operating-system migration adds availability, evidence and controlled extras", async () => {
+test("operating-system migration 007 adds availability, evidence and controlled extras", async () => {
   const migration = await readFile(migrationPath, "utf8");
   assert.match(migration, /CREATE TABLE professional_availability/);
   assert.match(migration, /CREATE TABLE work_evidence_files/);
   assert.match(migration, /CREATE TABLE change_orders/);
   assert.match(migration, /CREATE TABLE change_order_evidence/);
   assert.match(migration, /'OBRA_EVIDENCIA'/);
+  assert.match(migration, /'VERIFICACION_PROFESIONAL'/);
   assert.match(migration, /'EXTRA_SOLICITADO'/);
   assert.match(migration, /'EXTRA_APROBADO'/);
   assert.match(migration, /'EXTRA_RECHAZADO'/);

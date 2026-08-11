@@ -13,7 +13,7 @@ import {
   getPublicHomeServiceAssessment,
 } from "../../lib/home-service-assessment.js";
 
-const migrationUrl = new URL("../migrations/005_home_services_recurring.sql", import.meta.url);
+const migrationUrl = new URL("../migrations/008_home_services_recurring.sql", import.meta.url);
 const routeUrl = new URL("../src/routes/home-services.ts", import.meta.url);
 
 test("el catálogo mantiene MiConstructor dentro del cuidado de la propiedad", () => {
@@ -57,7 +57,7 @@ test("la evaluación no puede aprobarse sin responder las 15 preguntas", () => {
   assert.equal(result.total, 15);
 });
 
-test("la migración modela solicitud, oferta, relación recurrente, visitas y eventos append-only", async () => {
+test("la migración 008 modela solicitud, oferta, relación recurrente, visitas y eventos append-only", async () => {
   const sql = await readFile(migrationUrl, "utf8");
   for (const table of ["home_service_requests", "home_service_offers", "home_service_engagements", "home_service_visits", "home_service_visit_events"]) {
     assert.match(sql, new RegExp(`CREATE TABLE ${table}`));

@@ -81,6 +81,32 @@ async function registerClient(email: string, taxId: string) {
   await verifyLatestEmail(email);
 }
 
+async function approveProfessional(professionalId: string) {
+  await database.query(
+    "UPDATE professional_specialty_qualifications SET verification_status='APROBADO', reviewed_at=now() WHERE professional_id=$1",
+    [professionalId],
+  );
+  const identityFileId = randomUUID();
+  const taxFileId = randomUUID();
+  await database.query(
+    `INSERT INTO stored_files
+      (id, owner_id, purpose, object_key, original_name, content_type, size_bytes, sha256, moderation_status)
+     VALUES
+      ($1, $3, 'VERIFICACION_PROFESIONAL', $4, 'identidad.pdf', 'application/pdf', 1, $6, 'APROBADO'),
+      ($2, $3, 'VERIFICACION_PROFESIONAL', $5, 'situacion-fiscal.pdf', 'application/pdf', 1, $6, 'APROBADO')`,
+    [identityFileId, taxFileId, professionalId, `tests/${identityFileId}`, `tests/${taxFileId}`, "a".repeat(64)],
+  );
+  await database.query(
+    `INSERT INTO professional_verification_documents
+      (id, professional_id, file_id, document_type, status, reviewed_at)
+     VALUES
+      ($1, $3, $4, 'IDENTIDAD', 'APROBADO', now()),
+      ($2, $3, $5, 'SITUACION_FISCAL', 'APROBADO', now())`,
+    [randomUUID(), randomUUID(), professionalId, identityFileId, taxFileId],
+  );
+  await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [professionalId]);
+}
+
 test("las fechas mensuales conservan el día ancla y la fecha de negocio usa Europe/Madrid", () => {
   assert.equal(nextOccurrenceDate("2026-01-31", "MENSUAL", 31), "2026-02-28");
   assert.equal(nextOccurrenceDate("2026-02-28", "MENSUAL", 31), "2026-03-31");
@@ -157,8 +183,7 @@ test("flujo recurrente completo: onboarding, privacidad, autorización, ofertas,
   const blockedMarket = await professionalAgent.get("/api/v1/home-services/requests");
   assert.equal(blockedMarket.status, 403, blockedMarket.text);
 
-  await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [professionalId]);
-  await database.query("UPDATE professional_specialty_qualifications SET verification_status='APROBADO' WHERE professional_id=$1 AND specialty_slug='limpieza_profesional'", [professionalId]);
+  await approveProfessional(professionalId);
 
   const market = await professionalAgent.get("/api/v1/home-services/requests");
   assert.equal(market.status, 200, market.text);
