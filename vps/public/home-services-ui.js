@@ -2,6 +2,7 @@ const homeServicesApp = document.querySelector("#app");
 const homeServicesToast = document.querySelector("#toast");
 const HOME_SERVICES_PATH = "/servicios-hogar";
 const HOME_SERVICE_SPECIALTIES = new Set(["limpieza_profesional", "jardineria"]);
+let homeServicesRenderPromise = null;
 
 const hsEscape = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
@@ -274,32 +275,63 @@ async function renderProfessionalHomeServices(user, catalog) {
   bindEngagementActions();
 }
 
+function scrollHomeServicesHash() {
+  const targetId = window.location.hash.slice(1);
+  if (!targetId) return;
+  window.requestAnimationFrame(() => {
+    document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+  });
+}
+
 async function renderHomeServicesRoute() {
   if (!homeServicesApp || location.pathname !== HOME_SERVICES_PATH) return;
-  homeServicesApp.innerHTML = '<div class="loading">Cargando servicios del hogar…</div>';
-  try {
-    const [catalog, me] = await Promise.all([
-      hsApi("/api/v1/home-services/catalog"),
-      hsApi("/api/v1/auth/me").catch(() => ({ user: null })),
-    ]);
-    const user = me.user;
-    if (!user) {
-      homeServicesApp.innerHTML = `<main class="hs-shell"><header class="hs-page-head"><span class="eyebrow">CUIDADO INTEGRAL DE LA PROPIEDAD</span><h1>Limpieza y jardín, puntual o programado.</h1><p class="lead">Elige el servicio y la frecuencia. Para solicitar ofertas necesitas una cuenta de cliente; los profesionales pueden acreditarse por especialidad.</p><div class="actions"><a class="button primary" href="/registro-cliente">Crear cuenta de cliente →</a><a class="button" href="/para-profesionales">Soy profesional</a></div></header>${publicCatalog(catalog)}</main>`;
-      return;
+  if (homeServicesRenderPromise) return homeServicesRenderPromise;
+
+  homeServicesRenderPromise = (async () => {
+    homeServicesApp.innerHTML = '<div class="loading" data-hs-rendering="true">Cargando servicios del hogar…</div>';
+    try {
+      const [catalog, me] = await Promise.all([
+        hsApi("/api/v1/home-services/catalog"),
+        hsApi("/api/v1/auth/me").catch(() => ({ user: null })),
+      ]);
+      const user = me.user;
+      if (!user) {
+        homeServicesApp.innerHTML = `<main class="hs-shell"><header class="hs-page-head"><span class="eyebrow">CUIDADO INTEGRAL DE LA PROPIEDAD</span><h1>Limpieza y jardín, puntual o programado.</h1><p class="lead">Elige el servicio y la frecuencia. Para solicitar ofertas necesitas una cuenta de cliente; los profesionales pueden acreditarse por especialidad.</p><div class="actions"><a class="button primary" href="/registro-cliente">Crear cuenta de cliente →</a><a class="button" href="/para-profesionales">Soy profesional</a></div></header>${publicCatalog(catalog)}</main>`;
+        return;
+      }
+      if (user.role === "cliente") {
+        await renderClientHomeServices(user, catalog);
+        return;
+      }
+      if (user.role === "profesional") {
+        await renderProfessionalHomeServices(user, catalog);
+        return;
+      }
+      const [requestsResult, engagementsResult] = await Promise.all([hsApi("/api/v1/home-services/requests"), hsApi("/api/v1/home-services/engagements")]);
+      homeServicesApp.innerHTML = `<main class="hs-shell"><header class="hs-page-head"><span class="eyebrow">ADMIN</span><h1>Servicios de hogar</h1><p class="lead">Vista operativa de solicitudes y servicios recurrentes.</p></header>${publicCatalog(catalog)}<section class="hs-section"><h2>Solicitudes</h2><div class="notice">${requestsResult.requests.length} solicitudes registradas.</div></section><section class="hs-section"><h2>Relaciones de servicio</h2>${engagementsMarkup(engagementsResult.engagements || [], user)}</section></main>`;
+    } catch (error) {
+      homeServicesApp.innerHTML = `<main class="hs-shell"><div class="card"><h2>No se ha podido cargar</h2><p>${hsEscape(error.message)}</p><a class="button" href="/">Volver al inicio</a></div></main>`;
+    } finally {
+      homeServicesApp.focus();
+      scrollHomeServicesHash();
     }
-    if (user.role === "cliente") return renderClientHomeServices(user, catalog);
-    if (user.role === "profesional") return renderProfessionalHomeServices(user, catalog);
-    const [requestsResult, engagementsResult] = await Promise.all([hsApi("/api/v1/home-services/requests"), hsApi("/api/v1/home-services/engagements")]);
-    homeServicesApp.innerHTML = `<main class="hs-shell"><header class="hs-page-head"><span class="eyebrow">ADMIN</span><h1>Servicios de hogar</h1><p class="lead">Vista operativa de solicitudes y servicios recurrentes.</p></header>${publicCatalog(catalog)}<section class="hs-section"><h2>Solicitudes</h2><div class="notice">${requestsResult.requests.length} solicitudes registradas.</div></section><section class="hs-section"><h2>Relaciones de servicio</h2>${engagementsMarkup(engagementsResult.engagements || [], user)}</section></main>`;
-  } catch (error) {
-    homeServicesApp.innerHTML = `<main class="hs-shell"><div class="card"><h2>No se ha podido cargar</h2><p>${hsEscape(error.message)}</p><a class="button" href="/">Volver al inicio</a></div></main>`;
+  })();
+
+  try {
+    await homeServicesRenderPromise;
+  } finally {
+    homeServicesRenderPromise = null;
   }
-  homeServicesApp.focus();
 }
 
 const hsObserver = new MutationObserver(() => {
-  if (location.pathname === HOME_SERVICES_PATH && !homeServicesApp?.querySelector(".hs-shell")) void renderHomeServicesRoute();
+  if (
+    location.pathname === HOME_SERVICES_PATH
+    && !homeServicesRenderPromise
+    && !homeServicesApp?.querySelector(".hs-shell")
+  ) void renderHomeServicesRoute();
 });
 if (homeServicesApp) hsObserver.observe(homeServicesApp, { childList: true });
 window.addEventListener("popstate", () => window.setTimeout(() => void renderHomeServicesRoute(), 0));
+window.addEventListener("hashchange", scrollHomeServicesHash);
 window.setTimeout(() => void renderHomeServicesRoute(), 0);
