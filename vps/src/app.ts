@@ -9,6 +9,7 @@ import type { AppConfig } from "./config.js";
 import { publicRuntimeConfig } from "./config.js";
 import type { Database } from "./db.js";
 import { assertDatabaseReady } from "./db.js";
+import { adminBillingRouter } from "./routes/admin-billing.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { billingRouter, stripeClient, stripeWebhookHandler } from "./routes/billing.js";
@@ -127,6 +128,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1", writeLimiter, evidenceUploadsRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, uploadsRouter(database, config, storage));
   app.use("/api/v1", writeLimiter, legalSupportRouter(database));
+  app.use("/api/v1", writeLimiter, adminBillingRouter(database));
   app.use("/api/v1", writeLimiter, adminRouter(database));
 
   const publicDir = join(process.cwd(), "public");
