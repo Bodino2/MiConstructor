@@ -10,7 +10,6 @@ export function publicDirectoryRouter(database: Database) {
       const parsed = z.coerce.number().int().min(1).max(12).safeParse(request.query.limit ?? 5);
       const limit = parsed.success ? parsed.data : 5;
       const result = await database.query<{
-        id: string;
         display_name: string;
         specialty_label: string;
         location: string | null;
@@ -18,8 +17,7 @@ export function publicDirectoryRouter(database: Database) {
         review_count: string;
         insured: boolean;
       }>(
-        `SELECT u.id,
-                COALESCE(NULLIF(u.company_name, ''), u.name) AS display_name,
+        `SELECT COALESCE(NULLIF(u.company_name, ''), u.name) AS display_name,
                 q.specialty_label,
                 portfolio.location,
                 reviews.rating::text,
@@ -54,6 +52,7 @@ export function publicDirectoryRouter(database: Database) {
            ) reviews ON true
           WHERE u.role = 'profesional'
             AND u.account_status = 'ACTIVO'
+            AND u.email_verified = true
             AND u.verification_status = 'APROBADO'
           ORDER BY COALESCE(reviews.review_count, 0) DESC,
                    COALESCE(reviews.rating, 0) DESC,
@@ -64,7 +63,6 @@ export function publicDirectoryRouter(database: Database) {
 
       response.json({
         professionals: result.rows.map((row) => ({
-          id: row.id,
           displayName: row.display_name,
           specialty: row.specialty_label,
           location: row.location,
