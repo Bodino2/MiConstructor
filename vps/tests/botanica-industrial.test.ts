@@ -58,12 +58,15 @@ test("la portada separa usuarios, expone las tres verticales y no inventa métri
   assert.doesNotMatch(home, /\+25\.000|\+80\.000|\+65\.000|100% Pagos/);
 });
 
-test("el directorio público solo expone profesionales aprobados y no publica contacto privado", async () => {
+test("el directorio público solo expone profesionales realmente verificados y minimiza datos", async () => {
   const source = await readFile(directoryUrl, "utf8");
   assert.match(source, /verification_status = 'APROBADO'/);
   assert.match(source, /account_status = 'ACTIVO'/);
+  assert.match(source, /email_verified = true/);
   assert.match(source, /reviews[\s\S]*status = 'PUBLICADA'/);
-  assert.doesNotMatch(source, /u\.email|u\.phone|tax_id/);
+  assert.doesNotMatch(source, /u\.phone|tax_id/);
+  assert.doesNotMatch(source, /\bid:\s*row\./);
+  assert.doesNotMatch(source, /displayName:[\s\S]{0,220}(email|phone|taxId)/);
   assert.doesNotMatch(source, /requireAuth|requireRole/);
 });
 
