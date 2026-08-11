@@ -34,7 +34,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use((request, response, next) => {
     const requestId = request.get("x-request-id")?.slice(0, 100) || randomUUID();
     response.setHeader("x-request-id", requestId);
-    response.setHeader("cache-control", request.path.startsWith("/api/") ? "no-store" : "public, max-age=300");
+    response.setHeader("cache-control", request.path.startsWith("/api/") ? "no-store" : "no-cache");
     next();
   });
 
@@ -110,7 +110,13 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1", writeLimiter, adminRouter(database));
 
   const publicDir = join(process.cwd(), "public");
-  app.use(express.static(publicDir, { index: false, maxAge: config.NODE_ENV === "production" ? "1h" : 0 }));
+  app.use(express.static(publicDir, {
+    index: false,
+    etag: true,
+    maxAge: 0,
+    immutable: false,
+    setHeaders: (response) => response.setHeader("cache-control", "public, max-age=0, must-revalidate"),
+  }));
   app.get([
     "/",
     "/login",
@@ -129,6 +135,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/sepa",
     "/contacto",
   ], (_request, response) => {
+    response.setHeader("cache-control", "no-cache");
     response.sendFile(join(publicDir, "index.html"));
   });
 
