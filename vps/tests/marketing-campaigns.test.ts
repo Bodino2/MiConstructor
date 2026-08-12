@@ -137,7 +137,7 @@ test("la landing nacional exige zona y usa 50 km como radio recomendado", async 
   assert.match(ui, /"Valencia\/València"/);
 });
 
-test("la zona QR llega al formulario y se persiste para cliente y profesional", async () => {
+test("la zona QR llega al formulario y se persiste como zona base o de trabajo", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(areaBridgeUrl)], { stdio: "pipe" });
   const [bridge, areaMigration, authRoute, index] = await Promise.all([
     readFile(areaBridgeUrl, "utf8"),
@@ -151,7 +151,8 @@ test("la zona QR llega al formulario y se persiste para cliente y profesional", 
   assert.match(bridge, /serviceLocality/);
   assert.match(bridge, /serviceRadiusKm/);
   assert.match(bridge, /Zona de trabajo/);
-  assert.match(bridge, /Zona del proyecto/);
+  assert.match(bridge, /Zona base/);
+  assert.match(bridge, /La ubicación de cada obra se elige de nuevo al publicar el proyecto/);
 
   assert.match(areaMigration, /ADD COLUMN service_province text/);
   assert.match(areaMigration, /ADD COLUMN service_locality text/);
