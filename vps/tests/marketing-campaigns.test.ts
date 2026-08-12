@@ -53,7 +53,9 @@ test("el QR permanente registra el scan y redirige con atribución UTM", async (
   const response = await request(app).get("/r/linares-clientes-v1");
 
   assert.equal(response.status, 302, response.text);
-  const location = new URL(response.headers.location, "https://miconstructor.es");
+  const redirectLocation = response.headers.location;
+  assert.equal(typeof redirectLocation, "string");
+  const location = new URL(String(redirectLocation), "https://miconstructor.es");
   assert.equal(location.pathname, "/campana/linares-reformas");
   assert.equal(location.searchParams.get("utm_source"), "qr");
   assert.equal(location.searchParams.get("utm_medium"), "offline");
