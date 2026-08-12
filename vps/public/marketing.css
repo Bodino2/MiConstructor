@@ -45,8 +45,79 @@
   color: #596773;
 }
 
-.marketing-actions {
+.marketing-zone {
   margin-top: 30px;
+  padding: 22px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(44, 62, 80, 0.12);
+  box-shadow: 0 14px 34px rgba(44, 62, 80, 0.08);
+}
+
+.marketing-zone-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.marketing-zone-title strong {
+  color: #2c3e50;
+  font-size: 1.02rem;
+}
+
+.marketing-zone-title span {
+  color: #6d7780;
+  font-size: 0.88rem;
+}
+
+.marketing-zone-fields {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(220px, 1.2fr);
+  gap: 14px;
+}
+
+.marketing-zone-fields label {
+  display: grid;
+  gap: 7px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #465661;
+}
+
+.marketing-zone-fields select,
+.marketing-zone-fields input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid rgba(44, 62, 80, 0.2);
+  border-radius: 9px;
+  background: #fff;
+  color: #2c3e50;
+  font: inherit;
+  font-weight: 600;
+}
+
+.marketing-zone-fields select:focus,
+.marketing-zone-fields input:focus {
+  outline: 3px solid rgba(211, 84, 0, 0.18);
+  border-color: #d35400;
+}
+
+.marketing-zone-error {
+  margin: 12px 0 0;
+  color: #a63f00;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.marketing-zone-error[hidden] {
+  display: none;
+}
+
+.marketing-actions {
+  margin-top: 22px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -181,6 +252,12 @@
     padding-top: 48px;
   }
 
+  .marketing-zone-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
   .marketing-proof-grid {
     grid-template-columns: 1fr;
   }
@@ -192,6 +269,12 @@
 
   .marketing-bottom-cta .marketing-cta {
     width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .marketing-zone-fields {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -208,6 +291,10 @@
 
   .marketing-hero h1 {
     font-size: clamp(2.35rem, 13vw, 4rem);
+  }
+
+  .marketing-zone {
+    padding: 18px;
   }
 
   .marketing-actions,
