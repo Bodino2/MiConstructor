@@ -20,6 +20,18 @@ const config = {
   GEOAPIFY_API_KEY: "g".repeat(32),
 } as AppConfig;
 
+function professionalUser(id: string) {
+  return {
+    id,
+    email: "pro@example.es",
+    name: "Profesional",
+    role: "profesional" as const,
+    emailVerified: true,
+    accountStatus: "ACTIVO",
+    verificationStatus: "APROBADO",
+  };
+}
+
 test("Haversine calcula kilómetros reales y el score respeta el radio", () => {
   const distance = haversineDistanceKm(
     { latitude: 0, longitude: 0 },
@@ -139,6 +151,84 @@ test("Smart Matching excluye profesionales fuera de su radio real", async () => 
   assert.equal(response.body.matches[0].withinRadius, true);
 });
 
+test("el listado profesional no muestra proyectos fuera del radio configurado", async () => {
+  const professionalId = "55555555-5555-4555-8555-555555555555";
+  const database = {
+    async query(sql: string) {
+      if (sql.includes("WHERE u.id=$1 AND u.role='profesional'")) {
+        return { rows: [{
+          service_province: "Jaén",
+          service_locality: "Base",
+          service_latitude: 0,
+          service_longitude: 0,
+          travel_radius_km: 50,
+          service_areas: ["Base"],
+        }] };
+      }
+      if (sql.includes("FROM projects p")) {
+        const common = {
+          description: "Descripción suficientemente larga",
+          category: "electricidad",
+          project_type: "reforma_integral",
+          budget_cents: "100000",
+          status: "PUBLICADO",
+          created_at: "2026-08-12T10:00:00Z",
+          already_applied: false,
+          service_province: "Jaén",
+        };
+        return { rows: [
+          { ...common, id: "66666666-6666-4666-8666-666666666666", title: "Proyecto cerca", location: "Cerca", service_locality: "Cerca", latitude: 0, longitude: 0.1 },
+          { ...common, id: "77777777-7777-4777-8777-777777777777", title: "Proyecto lejos", location: "Lejos", service_locality: "Lejos", latitude: 0, longitude: 1 },
+        ] };
+      }
+      throw new Error(`Consulta inesperada: ${sql}`);
+    },
+  } as unknown as Database;
+  const app = express();
+  app.use((req, _res, next) => { req.user = professionalUser(professionalId); next(); });
+  app.use("/api/v1", geospatialRouter(database, config));
+
+  const response = await request(app).get("/api/v1/projects");
+  assert.equal(response.status, 200, response.text);
+  assert.equal(response.body.radiusFiltered, true);
+  assert.equal(response.body.projects.length, 1);
+  assert.equal(response.body.projects[0].title, "Proyecto cerca");
+  assert.ok(response.body.projects[0].distance_km > 11 && response.body.projects[0].distance_km < 12);
+});
+
+test("una llamada manual no puede enviar propuesta fuera del radio profesional", async () => {
+  const professionalId = "88888888-8888-4888-8888-888888888888";
+  const projectId = "99999999-9999-4999-8999-999999999999";
+  const database = {
+    async query(sql: string) {
+      if (sql.includes("WHERE u.id=$1 AND u.role='profesional'")) {
+        return { rows: [{
+          service_province: "Jaén",
+          service_locality: "Base",
+          service_latitude: 0,
+          service_longitude: 0,
+          travel_radius_km: 50,
+          service_areas: ["Base"],
+        }] };
+      }
+      if (sql.includes("SELECT location, latitude, longitude FROM projects")) {
+        return { rows: [{ location: "Lejos", latitude: 0, longitude: 1 }] };
+      }
+      throw new Error(`Consulta inesperada: ${sql}`);
+    },
+  } as unknown as Database;
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.user = professionalUser(professionalId); next(); });
+  app.use("/api/v1", geospatialRouter(database, config));
+
+  const response = await request(app).post("/api/v1/proposals").send({ projectId });
+  assert.equal(response.status, 403, response.text);
+  assert.match(response.body.error, /fuera de tu radio/);
+  assert.equal(response.body.radiusKm, 50);
+  assert.ok(response.body.distanceKm > 111 && response.body.distanceKm < 112);
+});
+
 test("schema și wiring păstrează adresa privată în afara matching-ului", async () => {
   const [migration, appSource, marketingUi] = await Promise.all([
     readFile(migrationUrl, "utf8"),
@@ -150,7 +240,7 @@ test("schema și wiring păstrează adresa privată în afara matching-ului", as
   assert.match(migration, /service_longitude/);
   assert.match(migration, /projects_sync_service_coordinates/);
   assert.match(migration, /no representa la dirección privada/i);
-  assert.match(appSource, /geospatialRouter\(database, config\)[\s\S]*operatingSystemRouter/);
+  assert.match(appSource, /geospatialRouter\(database, config\)[\s\S]*marketplaceRouter\(database, config, stripe\)[\s\S]*operatingSystemRouter/);
   assert.match(marketingUi, /\/api\/v1\/geo\/resolve/);
   assert.match(marketingUi, /Validando localidad/);
 });
