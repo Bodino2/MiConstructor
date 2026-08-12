@@ -31,7 +31,7 @@
     const professional = form.dataset.registrationPortal === "profesional";
     const summary = document.createElement("div");
     summary.className = "notice full marketing-registration-area-summary";
-    summary.innerHTML = `<strong>${professional ? "Zona de trabajo" : "Zona del proyecto"}</strong><br />${escapeHtml(locality)}, ${escapeHtml(province)} · <strong>+${radiusKm} km</strong>`;
+    summary.innerHTML = `<strong>${professional ? "Zona de trabajo" : "Zona base"}</strong><br />${escapeHtml(locality)}, ${escapeHtml(province)} · <strong>+${radiusKm} km</strong>${professional ? "" : "<br /><small>La ubicación de cada obra se elige de nuevo al publicar el proyecto.</small>"}`;
     const grid = form.querySelector(".form-grid");
     if (grid) grid.prepend(summary);
   }
