@@ -5,6 +5,14 @@
   const app = document.querySelector("#app");
   const nav = document.querySelector("#main-nav");
   const slug = match[1];
+  const provinces = [
+    "A Coruña", "Araba/Álava", "Albacete", "Alicante/Alacant", "Almería", "Asturias", "Ávila",
+    "Badajoz", "Barcelona", "Bizkaia", "Burgos", "Cáceres", "Cádiz", "Cantabria", "Castellón/Castelló",
+    "Ceuta", "Ciudad Real", "Córdoba", "Cuenca", "Girona", "Granada", "Guadalajara", "Gipuzkoa", "Huelva",
+    "Huesca", "Illes Balears", "Jaén", "La Rioja", "Las Palmas", "León", "Lleida", "Lugo", "Madrid", "Málaga",
+    "Melilla", "Murcia", "Navarra", "Ourense", "Palencia", "Pontevedra", "Salamanca", "Santa Cruz de Tenerife",
+    "Segovia", "Sevilla", "Soria", "Tarragona", "Teruel", "Toledo", "Valencia/València", "Valladolid", "Zamora", "Zaragoza",
+  ];
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'\"]/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '\"': "&quot;",
   })[character]);
@@ -28,8 +36,17 @@
     }).catch(() => undefined);
   }
 
+  function registrationHref(baseHref, province, locality) {
+    const target = new URL(baseHref, window.location.origin);
+    target.searchParams.set("provincia", province);
+    target.searchParams.set("localidad", locality);
+    target.searchParams.set("zona", `${locality}, ${province}`);
+    return `${target.pathname}${target.search}`;
+  }
+
   function render(campaign) {
     const professional = campaign.audience === "profesional";
+    const provinceOptions = provinces.map((province) => `<option value="${escapeHtml(province)}">${escapeHtml(province)}</option>`).join("");
     document.body.classList.add("marketing-campaign-page");
     document.title = `${campaign.headline} | MiConstructor`;
     if (nav) {
@@ -39,41 +56,84 @@
     }
     app.innerHTML = `<section class="marketing-hero">
       <div class="marketing-hero-copy">
-        <span class="marketing-eyebrow">MICONSTRUCTOR · LANZAMIENTO LOCAL</span>
+        <span class="marketing-eyebrow">MICONSTRUCTOR · ESPAÑA</span>
         <h1>${escapeHtml(campaign.headline)}</h1>
         <p class="marketing-lead">${escapeHtml(campaign.subheadline)}</p>
+        <div class="marketing-zone" id="marketing-zone">
+          <div class="marketing-zone-title">
+            <strong>¿Dónde quieres usar MiConstructor?</strong>
+            <span>El mismo QR funciona en toda España. Tú eliges la zona.</span>
+          </div>
+          <div class="marketing-zone-fields">
+            <label>Provincia
+              <select id="marketing-province" autocomplete="address-level1">
+                <option value="">Selecciona provincia</option>${provinceOptions}
+              </select>
+            </label>
+            <label>Localidad
+              <input id="marketing-locality" type="text" maxlength="100" autocomplete="address-level2" placeholder="Ej. Linares, Marbella, Getafe…" />
+            </label>
+          </div>
+          <p class="marketing-zone-error" id="marketing-zone-error" role="alert" hidden>Selecciona provincia e indica tu localidad para continuar.</p>
+        </div>
         <div class="marketing-actions">
           <a class="marketing-cta" data-marketing-cta href="${escapeHtml(campaign.ctaHref)}">${escapeHtml(campaign.ctaLabel)} →</a>
           <span>Sin compromiso para ${professional ? "crear tu perfil" : "publicar tu proyecto"}.</span>
         </div>
         <div class="marketing-proof-grid">
           ${professional
-            ? `<article><strong>Proyectos compatibles</strong><span>Oportunidades relacionadas con tu especialidad y zona.</span></article>
+            ? `<article><strong>Proyectos por zona</strong><span>La plataforma filtra oportunidades según tu ubicación y especialidad.</span></article>
                <article><strong>Perfil verificado</strong><span>Demuestra experiencia, documentación y oficio.</span></article>
-               <article><strong>Sin cuota mensual</strong><span>Entra en la plataforma sin pagar una suscripción fija.</span></article>`
-            : `<article><strong>Publicación sencilla</strong><span>Explica tu reforma y centraliza las propuestas.</span></article>
+               <article><strong>Un acceso nacional</strong><span>No necesitas un QR distinto para cada provincia o municipio.</span></article>`
+            : `<article><strong>Tu localidad primero</strong><span>Indicas dónde está el proyecto y trabajas con profesionales de esa zona.</span></article>
                <article><strong>Profesionales verificados</strong><span>Compara perfiles, especialidades y documentación.</span></article>
-               <article><strong>Decide con contexto</strong><span>Presupuestos comparables y trazabilidad del proyecto.</span></article>`}
+               <article><strong>Un QR para España</strong><span>La misma campaña sirve en cualquier ciudad sin duplicar códigos.</span></article>`}
         </div>
       </div>
       <aside class="marketing-card">
         <img src="/miconstructor-mark.svg" alt="MiConstructor" />
         <span>${professional ? "PARA PROFESIONALES" : "PARA CLIENTES"}</span>
-        <h2>${professional ? "Convierte tu oficio en oportunidades." : "Tu reforma empieza comparando bien."}</h2>
+        <h2>${professional ? "Tu zona de trabajo la eliges tú." : "Tu reforma empieza en tu localidad."}</h2>
         <ol>
           ${professional
-            ? "<li>Crea tu perfil.</li><li>Supera el test de tu especialidad.</li><li>Completa la verificación.</li><li>Accede a proyectos compatibles.</li>"
-            : "<li>Publica lo que necesitas.</li><li>Recibe propuestas.</li><li>Compara profesionales.</li><li>Elige y gestiona tu proyecto.</li>"}
+            ? "<li>Selecciona provincia y localidad.</li><li>Crea tu perfil.</li><li>Supera el test de tu especialidad.</li><li>Accede a proyectos compatibles.</li>"
+            : "<li>Selecciona provincia y localidad.</li><li>Publica lo que necesitas.</li><li>Compara profesionales.</li><li>Elige y gestiona tu proyecto.</li>"}
         </ol>
       </aside>
     </section>
     <section class="marketing-bottom-cta">
-      <div><span>MICONSTRUCTOR</span><h2>${professional ? "Tu próximo proyecto puede estar más cerca de lo que crees." : "No decidas tu reforma con una sola referencia."}</h2></div>
+      <div><span>MICONSTRUCTOR · ESPAÑA</span><h2>${professional ? "Un solo acceso. Tu área de trabajo la defines dentro de MiConstructor." : "Un solo QR para toda España; el proyecto se localiza dentro de la plataforma."}</h2></div>
       <a class="marketing-cta" data-marketing-cta href="${escapeHtml(campaign.ctaHref)}">${escapeHtml(campaign.ctaLabel)} →</a>
     </section>`;
 
+    const province = app.querySelector("#marketing-province");
+    const locality = app.querySelector("#marketing-locality");
+    const zoneError = app.querySelector("#marketing-zone-error");
+
+    function selectedDestination() {
+      const provinceValue = province?.value.trim() || "";
+      const localityValue = locality?.value.trim() || "";
+      if (!provinceValue || localityValue.length < 2) {
+        if (zoneError) zoneError.hidden = false;
+        app.querySelector("#marketing-zone")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (!provinceValue) province?.focus();
+        else locality?.focus();
+        return null;
+      }
+      if (zoneError) zoneError.hidden = true;
+      return registrationHref(campaign.ctaHref, provinceValue, localityValue);
+    }
+
     app.querySelectorAll("[data-marketing-cta]").forEach((link) => {
-      link.addEventListener("click", () => { void track(campaign.code, "CTA_CLICK"); });
+      link.addEventListener("click", (event) => {
+        const destination = selectedDestination();
+        if (!destination) {
+          event.preventDefault();
+          return;
+        }
+        link.setAttribute("href", destination);
+        void track(campaign.code, "CTA_CLICK");
+      });
     });
   }
 
