@@ -1,0 +1,67 @@
+.guide-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 64px 0 90px;
+  color: #2e2e2e;
+}
+.guide-hero,
+.guide-detail-hero {
+  padding: 38px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #f4f5f7 0%, #ffffff 100%);
+  border: 1px solid rgba(44, 62, 80, .10);
+}
+.guide-hero h1,
+.guide-detail-hero h1 {
+  max-width: 920px;
+  margin: 12px 0 18px;
+  color: #2c3e50;
+  font-size: clamp(2.4rem, 6vw, 5rem);
+  line-height: 1;
+  letter-spacing: -.05em;
+}
+.guide-hero p,
+.guide-detail-hero p { max-width: 850px; color: #68747d; font-size: 1.08rem; line-height: 1.7; }
+.guide-principles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin: 24px 0 54px; }
+.guide-principles article { padding: 22px; border-radius: 14px; background: #fff; border: 1px solid rgba(44,62,80,.10); }
+.guide-principles strong,
+.guide-principles span { display: block; }
+.guide-principles strong { color: #2c3e50; margin-bottom: 7px; }
+.guide-principles span { color: #68747d; line-height: 1.5; }
+.guide-section { margin-top: 58px; }
+.guide-section-head { margin-bottom: 18px; }
+.guide-section-head h2 { margin: 7px 0 0; color: #2c3e50; font-size: clamp(1.8rem, 4vw, 3rem); }
+.guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.guide-card { padding: 26px; border-radius: 18px; background: #fff; border: 1px solid rgba(44,62,80,.11); box-shadow: 0 16px 38px rgba(44,62,80,.07); }
+.guide-card h2 { margin: 10px 0 14px; color: #2c3e50; line-height: 1.15; }
+.guide-card p { color: #68747d; line-height: 1.6; }
+.guide-category { display: inline-block; color: #d35400; font-weight: 800; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
+.guide-price { color: #2c3e50; font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 900; }
+.guide-metric { color: #7f8c8d; margin: 3px 0 16px; }
+.guide-advice { display: grid; grid-template-columns: .8fr 1.2fr; gap: 34px; padding: 34px; border-radius: 20px; background: #2c3e50; color: #fff; }
+.guide-advice h2 { margin: 8px 0 0; font-size: clamp(1.8rem, 4vw, 3rem); }
+.guide-advice ol { margin: 0; padding-left: 1.3rem; color: #e9edf0; line-height: 1.8; }
+.guide-back { display: inline-block; margin-bottom: 18px; color: #2c3e50; font-weight: 800; text-decoration: none; }
+.guide-detail-price { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 24px; }
+.guide-detail-price strong { font-size: clamp(2rem, 5vw, 3.5rem); color: #d35400; }
+.guide-detail-price span { color: #68747d; font-weight: 700; }
+.guide-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .7fr); gap: 26px; margin-top: 26px; }
+.guide-detail-main,
+.guide-cta-card { padding: 28px; border-radius: 18px; background: #fff; border: 1px solid rgba(44,62,80,.11); }
+.guide-detail-main h2,
+.guide-cta-card h2 { color: #2c3e50; }
+.guide-detail-main p,
+.guide-detail-main li,
+.guide-cta-card p { color: #68747d; line-height: 1.7; }
+.guide-source { margin-top: 26px; padding-top: 20px; border-top: 1px solid rgba(44,62,80,.10); font-size: .9rem; }
+.guide-source a { color: #2c3e50; font-weight: 700; }
+.guide-not-found { padding: 50px; text-align: center; background: #fff; border-radius: 18px; }
+@media (max-width: 820px) {
+  .guide-principles,
+  .guide-grid,
+  .guide-advice,
+  .guide-detail-grid { grid-template-columns: 1fr; }
+  .guide-shell { padding-top: 36px; }
+  .guide-hero,
+  .guide-detail-hero { padding: 26px; }
+}
