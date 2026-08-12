@@ -1,0 +1,71 @@
+.project-area-fields {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(44, 62, 80, 0.14);
+  border-radius: 14px;
+  background: #f8f9fa;
+}
+
+.project-area-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-area-heading strong { color: #2c3e50; }
+.project-area-heading span,
+.project-area-help { color: #68747d; font-size: .88rem; }
+.project-area-help { margin: 0; }
+.project-area-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.project-area-grid label { display: grid; gap: 7px; }
+.project-area-error { margin: 0; color: #a63f00; font-weight: 700; }
+.project-area-error[hidden] { display: none; }
+
+.profile-area-summary {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(44, 62, 80, 0.12);
+  display: grid;
+  gap: 8px;
+}
+.profile-area-summary span { color: #68747d; font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; }
+.profile-area-summary strong { color: #2c3e50; line-height: 1.4; }
+.profile-area-summary .button { width: 100%; }
+
+.service-area-dialog { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 20px; }
+.service-area-backdrop { position: absolute; inset: 0; background: rgba(24, 35, 45, .62); backdrop-filter: blur(3px); }
+.service-area-card {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 30px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(20, 30, 40, .28);
+}
+.service-area-card h2 { margin: 8px 0 10px; color: #2c3e50; }
+.service-area-card > p { color: #68747d; line-height: 1.6; }
+.service-area-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(44, 62, 80, .14);
+  background: #f4f5f7;
+  color: #2c3e50;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+.service-area-card .notice.error { color: #8b3300; border-color: rgba(166, 63, 0, .25); background: #fff5ef; }
+
+@media (max-width: 760px) {
+  .project-area-grid { grid-template-columns: 1fr; }
+  .project-area-heading { align-items: flex-start; flex-direction: column; }
+  .service-area-card { padding: 24px; }
+}
