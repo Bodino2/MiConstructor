@@ -11,9 +11,9 @@ export type AuthUser = {
   emailVerified: boolean;
   accountStatus: string;
   verificationStatus: string;
-  serviceProvince: string | null;
-  serviceLocality: string | null;
-  serviceRadiusKm: number;
+  serviceProvince?: string | null;
+  serviceLocality?: string | null;
+  serviceRadiusKm?: number;
 };
 
 declare global {
