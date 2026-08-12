@@ -281,7 +281,7 @@ export function geospatialRouter(database: Database, config: AppConfig) {
         if (distanceKm > proRadius || distanceKm > clientRadius) return [];
         return [{ ...row, distance_km: Number(distanceKm.toFixed(1)), within_radius: true }];
       }).slice(0, 100);
-      return response.json({ projects, matchingMode: "GEOSPATIAL_RADIUS" });
+      return response.json({ projects, matchingMode: "GEOSPATIAL_RADIUS", radiusFiltered: true });
     } catch (error) { next(error); }
   });
 
@@ -310,7 +310,12 @@ export function geospatialRouter(database: Database, config: AppConfig) {
       const professionalRadius = toNumber(row.service_radius_km) || 50;
       const projectRadius = toNumber(row.search_radius_km) || 50;
       if (distanceKm > professionalRadius || distanceKm > projectRadius) {
-        return response.status(403).json({ error: "Este proyecto está fuera del radio de trabajo permitido para esta propuesta." });
+        return response.status(403).json({
+          error: "Este proyecto está fuera de tu radio de trabajo permitido para esta propuesta.",
+          distanceKm: Number(distanceKm.toFixed(1)),
+          radiusKm: professionalRadius,
+          projectRadiusKm: projectRadius,
+        });
       }
       next();
     } catch (error) { next(error); }
