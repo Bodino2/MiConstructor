@@ -9,9 +9,12 @@ import type { Database } from "../src/db.js";
 import { marketingRedirectRouter, marketingRouter } from "../src/routes/marketing.js";
 
 const migrationUrl = new URL("../migrations/010_marketing_campaigns.sql", import.meta.url);
+const serviceAreaMigrationUrl = new URL("../migrations/011_user_service_area.sql", import.meta.url);
 const routeUrl = new URL("../src/routes/marketing.ts", import.meta.url);
+const authRouteUrl = new URL("../src/routes/auth.ts", import.meta.url);
 const uiUrl = new URL("../public/marketing-ui.js", import.meta.url);
 const attributionUrl = new URL("../public/marketing-attribution.js", import.meta.url);
+const areaBridgeUrl = new URL("../public/marketing-registration-area.js", import.meta.url);
 const cssUrl = new URL("../public/marketing.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
 const bootstrapUrl = new URL("../public/app-bootstrap.js", import.meta.url);
@@ -118,18 +121,50 @@ test("la telemetría de marketing es agregada y no guarda huellas personales", a
   assert.match(route, /requireAuth, requireRole\("admin"\)/);
 });
 
-test("la landing nacional exige provincia y localidad y las transmite al registro", async () => {
+test("la landing nacional exige zona y usa 50 km como radio recomendado", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(uiUrl)], { stdio: "pipe" });
   const ui = await readFile(uiUrl, "utf8");
   assert.match(ui, /marketing-province/);
   assert.match(ui, /marketing-locality/);
-  assert.match(ui, /Selecciona provincia e indica tu localidad/);
+  assert.match(ui, /marketing-radius/);
+  assert.match(ui, /<option value="50" selected>\+50 km<\/option>/);
   assert.match(ui, /searchParams\.set\("provincia"/);
   assert.match(ui, /searchParams\.set\("localidad"/);
+  assert.match(ui, /searchParams\.set\("radioKm"/);
   assert.match(ui, /searchParams\.set\("zona"/);
   assert.match(ui, /"Jaén"/);
   assert.match(ui, /"Madrid"/);
   assert.match(ui, /"Valencia\/València"/);
+});
+
+test("la zona QR llega al formulario y se persiste para cliente y profesional", async () => {
+  execFileSync(process.execPath, ["--check", fileURLToPath(areaBridgeUrl)], { stdio: "pipe" });
+  const [bridge, areaMigration, authRoute, index] = await Promise.all([
+    readFile(areaBridgeUrl, "utf8"),
+    readFile(serviceAreaMigrationUrl, "utf8"),
+    readFile(authRouteUrl, "utf8"),
+    readFile(indexUrl, "utf8"),
+  ]);
+
+  assert.match(index, /marketing-registration-area\.js/);
+  assert.match(bridge, /serviceProvince/);
+  assert.match(bridge, /serviceLocality/);
+  assert.match(bridge, /serviceRadiusKm/);
+  assert.match(bridge, /Zona de trabajo/);
+  assert.match(bridge, /Zona del proyecto/);
+
+  assert.match(areaMigration, /ADD COLUMN service_province text/);
+  assert.match(areaMigration, /ADD COLUMN service_locality text/);
+  assert.match(areaMigration, /service_radius_km integer NOT NULL DEFAULT 50/);
+  assert.match(areaMigration, /BETWEEN 5 AND 200/);
+
+  assert.match(authRoute, /serviceProvince: z\.string/);
+  assert.match(authRoute, /serviceLocality: z\.string/);
+  assert.match(authRoute, /serviceRadiusKm: z\.coerce\.number/);
+  assert.match(authRoute, /service_province, service_locality, service_radius_km/);
+  assert.match(authRoute, /INSERT INTO professional_availability/);
+  assert.match(authRoute, /travel_radius_km = EXCLUDED\.travel_radius_km/);
+  assert.match(authRoute, /service_areas = EXCLUDED\.service_areas/);
 });
 
 test("la aplicación carga la landing dedicada, atribución y assets de campaña", async () => {
@@ -144,7 +179,7 @@ test("la aplicación carga la landing dedicada, atribución y assets de campaña
     readFile(appUrl, "utf8"),
   ]);
   assert.match(index, /marketing\.css/);
-  assert.match(index, /marketing-attribution\.js[\s\S]*marketing-ui\.js/);
+  assert.match(index, /marketing-attribution\.js[\s\S]*marketing-ui\.js[\s\S]*marketing-registration-area\.js/);
   assert.match(bootstrap, /startsWith\("\/campana\/"\)/);
   assert.match(appSource, /marketingRedirectRouter/);
   assert.match(appSource, /"\/campana\/:slug"/);
@@ -154,6 +189,7 @@ test("la aplicación carga la landing dedicada, atribución y assets de campaña
   assert.match(attribution, /SIGNUP/);
   assert.match(css, /marketing-proof-grid/);
   assert.match(css, /marketing-zone-fields/);
+  assert.match(css, /marketing-zone-hint/);
 });
 
 test("solo existen dos QR nacionales imprimibles para toda España", async () => {
