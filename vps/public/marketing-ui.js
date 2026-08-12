@@ -22,7 +22,7 @@
     if (options.body) headers.set("content-type", "application/json");
     const response = await fetch(path, { ...options, headers, credentials: "same-origin" });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(payload?.error || "No se ha podido cargar la campaña.");
+    if (!response.ok) throw new Error(payload?.error || "No se ha podido completar la operación.");
     return payload;
   }
 
@@ -85,7 +85,7 @@
               </select>
             </label>
           </div>
-          <p class="marketing-zone-hint">Ejemplo: <strong>Linares +50 km</strong> incluye oportunidades o profesionales dentro del radio configurado alrededor de Linares.</p>
+          <p class="marketing-zone-hint">Ejemplo: <strong>Linares +50 km</strong> incluye oportunidades o profesionales dentro del radio configurado alrededor de Linares. MiConstructor valida la localidad antes de crear la cuenta.</p>
           <p class="marketing-zone-error" id="marketing-zone-error" role="alert" hidden>Selecciona provincia e indica tu localidad para continuar.</p>
         </div>
         <div class="marketing-actions">
@@ -94,10 +94,10 @@
         </div>
         <div class="marketing-proof-grid">
           ${professional
-            ? `<article><strong>Radio configurable</strong><span>50 km por defecto; puedes ampliarlo o reducirlo según tu movilidad.</span></article>
-               <article><strong>Proyectos por zona</strong><span>La plataforma podrá priorizar oportunidades compatibles con tu localidad y radio.</span></article>
+            ? `<article><strong>Radio real en kilómetros</strong><span>La distancia se calcula entre localidades y se compara con el radio que eliges.</span></article>
+               <article><strong>Proyectos por zona</strong><span>Las oportunidades fuera de tu radio quedan fuera del matching geográfico.</span></article>
                <article><strong>Un acceso nacional</strong><span>No necesitas un QR distinto para cada provincia o municipio.</span></article>`
-            : `<article><strong>Radio configurable</strong><span>Busca profesionales alrededor de la localidad del proyecto, con 50 km por defecto.</span></article>
+            : `<article><strong>Radio real en kilómetros</strong><span>MiConstructor valida la localidad y busca dentro del radio configurado.</span></article>
                <article><strong>Profesionales verificados</strong><span>Compara perfiles, especialidades y documentación.</span></article>
                <article><strong>Un QR para España</strong><span>La misma campaña sirve en cualquier ciudad sin duplicar códigos.</span></article>`}
         </div>
@@ -108,8 +108,8 @@
         <h2>${professional ? "Tu zona de trabajo la eliges tú." : "Tú decides hasta dónde buscar."}</h2>
         <ol>
           ${professional
-            ? "<li>Selecciona provincia y localidad.</li><li>Define tu radio, 50 km por defecto.</li><li>Crea y verifica tu perfil.</li><li>Recibe proyectos compatibles.</li>"
-            : "<li>Selecciona provincia y localidad.</li><li>Define el radio, 50 km por defecto.</li><li>Publica lo que necesitas.</li><li>Compara profesionales de la zona.</li>"}
+            ? "<li>Selecciona provincia y localidad.</li><li>Define tu radio, 50 km por defecto.</li><li>Validamos la localidad.</li><li>Recibe proyectos dentro de tu radio.</li>"
+            : "<li>Selecciona provincia y localidad.</li><li>Define el radio, 50 km por defecto.</li><li>Validamos la localidad.</li><li>Compara profesionales dentro de la zona.</li>"}
         </ol>
       </aside>
     </section>
@@ -122,13 +122,17 @@
     const locality = app.querySelector("#marketing-locality");
     const radius = app.querySelector("#marketing-radius");
     const zoneError = app.querySelector("#marketing-zone-error");
+    let validating = false;
 
-    function selectedDestination() {
+    function selectedArea() {
       const provinceValue = province?.value.trim() || "";
       const localityValue = locality?.value.trim() || "";
       const radiusValue = Number(radius?.value || 50);
       if (!provinceValue || localityValue.length < 2 || !Number.isInteger(radiusValue) || radiusValue < 5 || radiusValue > 200) {
-        if (zoneError) zoneError.hidden = false;
+        if (zoneError) {
+          zoneError.textContent = "Selecciona provincia e indica tu localidad para continuar.";
+          zoneError.hidden = false;
+        }
         app.querySelector("#marketing-zone")?.scrollIntoView({ behavior: "smooth", block: "center" });
         if (!provinceValue) province?.focus();
         else if (localityValue.length < 2) locality?.focus();
@@ -136,18 +140,41 @@
         return null;
       }
       if (zoneError) zoneError.hidden = true;
-      return registrationHref(campaign.ctaHref, provinceValue, localityValue, radiusValue);
+      return {
+        province: provinceValue,
+        locality: localityValue,
+        radiusKm: radiusValue,
+        destination: registrationHref(campaign.ctaHref, provinceValue, localityValue, radiusValue),
+      };
     }
 
     app.querySelectorAll("[data-marketing-cta]").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        const destination = selectedDestination();
-        if (!destination) {
-          event.preventDefault();
-          return;
+      link.addEventListener("click", async (event) => {
+        event.preventDefault();
+        if (validating) return;
+        const area = selectedArea();
+        if (!area) return;
+        validating = true;
+        const previousLabel = link.textContent;
+        app.querySelectorAll("[data-marketing-cta]").forEach((item) => item.setAttribute("aria-disabled", "true"));
+        link.textContent = "Validando localidad…";
+        try {
+          await api("/api/v1/geo/resolve", {
+            method: "POST",
+            body: JSON.stringify({ province: area.province, locality: area.locality }),
+          });
+          void track(campaign.code, "CTA_CLICK");
+          window.location.assign(area.destination);
+        } catch (error) {
+          validating = false;
+          app.querySelectorAll("[data-marketing-cta]").forEach((item) => item.removeAttribute("aria-disabled"));
+          link.textContent = previousLabel;
+          if (zoneError) {
+            zoneError.textContent = error.message || "No hemos podido validar esa localidad.";
+            zoneError.hidden = false;
+          }
+          app.querySelector("#marketing-zone")?.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-        link.setAttribute("href", destination);
-        void track(campaign.code, "CTA_CLICK");
       });
     });
   }
