@@ -38,6 +38,9 @@ const registerSchema = z.object({
   phone: z.string().trim().max(30).optional(),
   specialty: z.string().trim().max(80).optional(),
   assessment: z.unknown().optional(),
+  serviceProvince: z.string().trim().min(2).max(100).optional(),
+  serviceLocality: z.string().trim().min(2).max(100).optional(),
+  serviceRadiusKm: z.coerce.number().int().min(5).max(200).default(50),
   privacyAccepted: z.literal(true),
 });
 
@@ -87,6 +90,12 @@ export function authRouter(database: Database, config: AppConfig) {
       const taxId = input.taxId.toUpperCase().replace(/[\s-]/g, "");
       if (!isValidSpanishTaxId(taxId)) return response.status(400).json({ error: "NIF, NIE o CIF no válido." });
 
+      const hasProvince = Boolean(input.serviceProvince);
+      const hasLocality = Boolean(input.serviceLocality);
+      if (hasProvince !== hasLocality) {
+        return response.status(400).json({ error: "Provincia y localidad deben indicarse juntas." });
+      }
+
       let assessment: RegistrationAssessment | null = null;
       if (input.role === "profesional") {
         const constructionSpecialty = normalizeProfessionalSpecialty(input.specialty);
@@ -116,12 +125,15 @@ export function authRouter(database: Database, config: AppConfig) {
         await client.query(
           `INSERT INTO users
             (id, email, name, password_hash, role, tax_id, company_name, phone,
+             service_province, service_locality, service_radius_km,
              email_verified, account_status, verification_status,
              privacy_version, privacy_accepted_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, 'ACTIVO', $9, '2026-08-09', now())`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                   false, 'ACTIVO', $12, '2026-08-09', now())`,
           [
             userId, input.email, input.name, passwordHash, input.role, taxId,
             input.companyName ?? null, input.phone ?? null,
+            input.serviceProvince ?? null, input.serviceLocality ?? null, input.serviceRadiusKm,
             input.role === "profesional" ? "PENDIENTE_REVISION" : "NO_APLICA",
           ],
         );
@@ -151,7 +163,16 @@ export function authRouter(database: Database, config: AppConfig) {
           text: `Confirma tu email: ${verifyUrl}`,
           html: `<p>Confirma tu cuenta de MiConstructor:</p><p><a href="${verifyUrl}">Verificar email</a></p>`,
         });
-        await audit(client, { actorUserId: userId, action: "USER_REGISTERED", entityType: "user", entityId: userId, ip: request.ip });
+        await audit(client, {
+          actorUserId: userId,
+          action: "USER_REGISTERED",
+          entityType: "user",
+          entityId: userId,
+          ip: request.ip,
+          metadata: input.serviceProvince && input.serviceLocality
+            ? { serviceAreaConfigured: true, serviceRadiusKm: input.serviceRadiusKm }
+            : { serviceAreaConfigured: false },
+        });
       });
       return response.status(201).json({ success: true, message: "Cuenta creada. Revisa tu email para activarla." });
     } catch (error: unknown) {
