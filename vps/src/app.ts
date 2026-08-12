@@ -19,6 +19,7 @@ import { homeServicesLifecycleRouter } from "./routes/home-services-lifecycle.js
 import { homeServicesRouter } from "./routes/home-services.js";
 import { intelligenceRouter } from "./routes/intelligence.js";
 import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./routes/legal-support.js";
+import { marketingRedirectRouter, marketingRouter } from "./routes/marketing.js";
 import { marketplaceRouter } from "./routes/marketplace.js";
 import { mobileAuthRouter } from "./routes/mobile-auth.js";
 import { operatingSystemRouter } from "./routes/operating-system.js";
@@ -95,6 +96,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use(cookieParser());
   app.use(authentication(database, config));
   app.use(originProtection(config));
+  app.use(marketingRedirectRouter(database));
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -115,6 +117,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.post("/api/v1/auth/register", registrationLegalGate);
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
+  app.use("/api/v1", writeLimiter, marketingRouter(database));
   app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, intelligenceRouter(database));
@@ -147,6 +150,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/para-profesionales",
     "/registro-profesional",
     "/servicios-hogar",
+    "/campana/:slug",
     "/panel",
     "/verificar-email",
     "/restablecer",
