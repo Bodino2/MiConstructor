@@ -98,6 +98,7 @@ test("Smart Matching excluye profesionales fuera de su radio real", async () => 
           service_locality: "Linares",
           latitude: 0,
           longitude: 0,
+          search_radius_km: 50,
         }] };
       }
       if (sql.includes("FROM users u")) {
@@ -155,15 +156,8 @@ test("el listado profesional no muestra proyectos fuera del radio configurado", 
   const professionalId = "55555555-5555-4555-8555-555555555555";
   const database = {
     async query(sql: string) {
-      if (sql.includes("WHERE u.id=$1 AND u.role='profesional'")) {
-        return { rows: [{
-          service_province: "Jaén",
-          service_locality: "Base",
-          service_latitude: 0,
-          service_longitude: 0,
-          travel_radius_km: 50,
-          service_areas: ["Base"],
-        }] };
+      if (sql.includes("SELECT service_latitude, service_longitude, service_radius_km FROM users WHERE id=$1")) {
+        return { rows: [{ service_latitude: 0, service_longitude: 0, service_radius_km: 50 }] };
       }
       if (sql.includes("FROM projects p")) {
         const common = {
@@ -175,6 +169,7 @@ test("el listado profesional no muestra proyectos fuera del radio configurado", 
           created_at: "2026-08-12T10:00:00Z",
           already_applied: false,
           service_province: "Jaén",
+          search_radius_km: 50,
         };
         return { rows: [
           { ...common, id: "66666666-6666-4666-8666-666666666666", title: "Proyecto cerca", location: "Cerca", service_locality: "Cerca", latitude: 0, longitude: 0.1 },
@@ -191,6 +186,7 @@ test("el listado profesional no muestra proyectos fuera del radio configurado", 
   const response = await request(app).get("/api/v1/projects");
   assert.equal(response.status, 200, response.text);
   assert.equal(response.body.radiusFiltered, true);
+  assert.equal(response.body.matchingMode, "GEOSPATIAL_RADIUS");
   assert.equal(response.body.projects.length, 1);
   assert.equal(response.body.projects[0].title, "Proyecto cerca");
   assert.ok(response.body.projects[0].distance_km > 11 && response.body.projects[0].distance_km < 12);
@@ -201,18 +197,15 @@ test("una llamada manual no puede enviar propuesta fuera del radio profesional",
   const projectId = "99999999-9999-4999-8999-999999999999";
   const database = {
     async query(sql: string) {
-      if (sql.includes("WHERE u.id=$1 AND u.role='profesional'")) {
+      if (sql.includes("FROM projects p CROSS JOIN users u")) {
         return { rows: [{
-          service_province: "Jaén",
-          service_locality: "Base",
+          latitude: 0,
+          longitude: 1,
+          search_radius_km: 150,
           service_latitude: 0,
           service_longitude: 0,
-          travel_radius_km: 50,
-          service_areas: ["Base"],
+          service_radius_km: 50,
         }] };
-      }
-      if (sql.includes("SELECT location, latitude, longitude FROM projects")) {
-        return { rows: [{ location: "Lejos", latitude: 0, longitude: 1 }] };
       }
       throw new Error(`Consulta inesperada: ${sql}`);
     },
@@ -226,6 +219,7 @@ test("una llamada manual no puede enviar propuesta fuera del radio profesional",
   assert.equal(response.status, 403, response.text);
   assert.match(response.body.error, /fuera de tu radio/);
   assert.equal(response.body.radiusKm, 50);
+  assert.equal(response.body.projectRadiusKm, 150);
   assert.ok(response.body.distanceKm > 111 && response.body.distanceKm < 112);
 });
 
