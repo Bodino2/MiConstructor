@@ -155,6 +155,19 @@ export function authRouter(database: Database, config: AppConfig) {
              VALUES ($1, 'PENDIENTE_MANDATO')`,
             [userId],
           );
+          if (input.serviceProvince && input.serviceLocality) {
+            const combinedArea = `${input.serviceLocality}, ${input.serviceProvince}`;
+            await client.query(
+              `INSERT INTO professional_availability
+                (professional_id, concurrent_capacity, travel_radius_km, service_areas)
+               VALUES ($1, 1, $2, ARRAY[$3,$4,$5]::text[])
+               ON CONFLICT (professional_id) DO UPDATE SET
+                 travel_radius_km = EXCLUDED.travel_radius_km,
+                 service_areas = EXCLUDED.service_areas,
+                 updated_at = now()`,
+              [userId, input.serviceRadiusKm, input.serviceLocality, input.serviceProvince, combinedArea],
+            );
+          }
         }
         const verifyUrl = `${config.APP_URL}/verificar-email?token=${encodeURIComponent(verificationToken)}`;
         await enqueueMail(client, {
