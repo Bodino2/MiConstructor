@@ -36,11 +36,12 @@
     }).catch(() => undefined);
   }
 
-  function registrationHref(baseHref, province, locality) {
+  function registrationHref(baseHref, province, locality, radiusKm) {
     const target = new URL(baseHref, window.location.origin);
     target.searchParams.set("provincia", province);
     target.searchParams.set("localidad", locality);
-    target.searchParams.set("zona", `${locality}, ${province}`);
+    target.searchParams.set("radioKm", String(radiusKm));
+    target.searchParams.set("zona", `${locality}, ${province} · ${radiusKm} km`);
     return `${target.pathname}${target.search}`;
   }
 
@@ -61,8 +62,8 @@
         <p class="marketing-lead">${escapeHtml(campaign.subheadline)}</p>
         <div class="marketing-zone" id="marketing-zone">
           <div class="marketing-zone-title">
-            <strong>¿Dónde quieres usar MiConstructor?</strong>
-            <span>El mismo QR funciona en toda España. Tú eliges la zona.</span>
+            <strong>${professional ? "Define tu zona de trabajo" : "Define la zona de tu proyecto"}</strong>
+            <span>El mismo QR funciona en toda España. 50 km es la opción recomendada.</span>
           </div>
           <div class="marketing-zone-fields">
             <label>Provincia
@@ -73,7 +74,18 @@
             <label>Localidad
               <input id="marketing-locality" type="text" maxlength="100" autocomplete="address-level2" placeholder="Ej. Linares, Marbella, Getafe…" />
             </label>
+            <label>${professional ? "Radio de trabajo" : "Radio de búsqueda"}
+              <select id="marketing-radius">
+                <option value="10">+10 km</option>
+                <option value="25">+25 km</option>
+                <option value="50" selected>+50 km</option>
+                <option value="75">+75 km</option>
+                <option value="100">+100 km</option>
+                <option value="150">+150 km</option>
+              </select>
+            </label>
           </div>
+          <p class="marketing-zone-hint">Ejemplo: <strong>Linares +50 km</strong> incluye oportunidades o profesionales dentro del radio configurado alrededor de Linares.</p>
           <p class="marketing-zone-error" id="marketing-zone-error" role="alert" hidden>Selecciona provincia e indica tu localidad para continuar.</p>
         </div>
         <div class="marketing-actions">
@@ -82,10 +94,10 @@
         </div>
         <div class="marketing-proof-grid">
           ${professional
-            ? `<article><strong>Proyectos por zona</strong><span>La plataforma filtra oportunidades según tu ubicación y especialidad.</span></article>
-               <article><strong>Perfil verificado</strong><span>Demuestra experiencia, documentación y oficio.</span></article>
+            ? `<article><strong>Radio configurable</strong><span>50 km por defecto; puedes ampliarlo o reducirlo según tu movilidad.</span></article>
+               <article><strong>Proyectos por zona</strong><span>La plataforma podrá priorizar oportunidades compatibles con tu localidad y radio.</span></article>
                <article><strong>Un acceso nacional</strong><span>No necesitas un QR distinto para cada provincia o municipio.</span></article>`
-            : `<article><strong>Tu localidad primero</strong><span>Indicas dónde está el proyecto y trabajas con profesionales de esa zona.</span></article>
+            : `<article><strong>Radio configurable</strong><span>Busca profesionales alrededor de la localidad del proyecto, con 50 km por defecto.</span></article>
                <article><strong>Profesionales verificados</strong><span>Compara perfiles, especialidades y documentación.</span></article>
                <article><strong>Un QR para España</strong><span>La misma campaña sirve en cualquier ciudad sin duplicar códigos.</span></article>`}
         </div>
@@ -93,35 +105,38 @@
       <aside class="marketing-card">
         <img src="/miconstructor-mark.svg" alt="MiConstructor" />
         <span>${professional ? "PARA PROFESIONALES" : "PARA CLIENTES"}</span>
-        <h2>${professional ? "Tu zona de trabajo la eliges tú." : "Tu reforma empieza en tu localidad."}</h2>
+        <h2>${professional ? "Tu zona de trabajo la eliges tú." : "Tú decides hasta dónde buscar."}</h2>
         <ol>
           ${professional
-            ? "<li>Selecciona provincia y localidad.</li><li>Crea tu perfil.</li><li>Supera el test de tu especialidad.</li><li>Accede a proyectos compatibles.</li>"
-            : "<li>Selecciona provincia y localidad.</li><li>Publica lo que necesitas.</li><li>Compara profesionales.</li><li>Elige y gestiona tu proyecto.</li>"}
+            ? "<li>Selecciona provincia y localidad.</li><li>Define tu radio, 50 km por defecto.</li><li>Crea y verifica tu perfil.</li><li>Recibe proyectos compatibles.</li>"
+            : "<li>Selecciona provincia y localidad.</li><li>Define el radio, 50 km por defecto.</li><li>Publica lo que necesitas.</li><li>Compara profesionales de la zona.</li>"}
         </ol>
       </aside>
     </section>
     <section class="marketing-bottom-cta">
-      <div><span>MICONSTRUCTOR · ESPAÑA</span><h2>${professional ? "Un solo acceso. Tu área de trabajo la defines dentro de MiConstructor." : "Un solo QR para toda España; el proyecto se localiza dentro de la plataforma."}</h2></div>
+      <div><span>MICONSTRUCTOR · ESPAÑA</span><h2>${professional ? "Una localidad base y el radio que realmente quieres trabajar." : "Una localidad base y el radio en el que quieres encontrar profesionales."}</h2></div>
       <a class="marketing-cta" data-marketing-cta href="${escapeHtml(campaign.ctaHref)}">${escapeHtml(campaign.ctaLabel)} →</a>
     </section>`;
 
     const province = app.querySelector("#marketing-province");
     const locality = app.querySelector("#marketing-locality");
+    const radius = app.querySelector("#marketing-radius");
     const zoneError = app.querySelector("#marketing-zone-error");
 
     function selectedDestination() {
       const provinceValue = province?.value.trim() || "";
       const localityValue = locality?.value.trim() || "";
-      if (!provinceValue || localityValue.length < 2) {
+      const radiusValue = Number(radius?.value || 50);
+      if (!provinceValue || localityValue.length < 2 || !Number.isInteger(radiusValue) || radiusValue < 5 || radiusValue > 200) {
         if (zoneError) zoneError.hidden = false;
         app.querySelector("#marketing-zone")?.scrollIntoView({ behavior: "smooth", block: "center" });
         if (!provinceValue) province?.focus();
-        else locality?.focus();
+        else if (localityValue.length < 2) locality?.focus();
+        else radius?.focus();
         return null;
       }
       if (zoneError) zoneError.hidden = true;
-      return registrationHref(campaign.ctaHref, provinceValue, localityValue);
+      return registrationHref(campaign.ctaHref, provinceValue, localityValue, radiusValue);
     }
 
     app.querySelectorAll("[data-marketing-cta]").forEach((link) => {
