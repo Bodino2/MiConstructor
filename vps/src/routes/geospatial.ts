@@ -15,6 +15,7 @@ import {
   calculateProjectMatchScore,
   calculateVerifiedProfessionalScore,
   capacityFit,
+  locationFit,
 } from "../services/professional-ranking.js";
 
 const resolveSchema = z.object({
@@ -26,6 +27,58 @@ const toNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
 };
+
+type ProfessionalArea = {
+  service_province: string | null;
+  service_locality: string | null;
+  service_latitude: number | string | null;
+  service_longitude: number | string | null;
+  travel_radius_km: number | string;
+  service_areas: string[];
+};
+
+type ProjectArea = {
+  location: string;
+  latitude: number | string | null;
+  longitude: number | string | null;
+};
+
+async function loadProfessionalArea(database: Database, professionalId: string) {
+  const result = await database.query<ProfessionalArea>(
+    `SELECT u.service_province, u.service_locality, u.service_latitude, u.service_longitude,
+            COALESCE(a.travel_radius_km,u.service_radius_km,50) AS travel_radius_km,
+            COALESCE(a.service_areas,'{}'::text[]) AS service_areas
+       FROM users u
+       LEFT JOIN professional_availability a ON a.professional_id=u.id
+      WHERE u.id=$1 AND u.role='profesional'`,
+    [professionalId],
+  );
+  return result.rows[0] ?? null;
+}
+
+function projectAreaDecision(project: ProjectArea, professional: ProfessionalArea) {
+  const radiusKm = Math.max(1, toNumber(professional.travel_radius_km) || 50);
+  if (
+    project.latitude != null
+    && project.longitude != null
+    && professional.service_latitude != null
+    && professional.service_longitude != null
+  ) {
+    const distanceKm = haversineDistanceKm(
+      { latitude: toNumber(project.latitude), longitude: toNumber(project.longitude) },
+      { latitude: toNumber(professional.service_latitude), longitude: toNumber(professional.service_longitude) },
+    );
+    return { allowed: distanceKm <= radiusKm, distanceKm, radiusKm, mode: "GEOSPATIAL_RADIUS" as const };
+  }
+  const serviceAreas = professional.service_areas ?? [];
+  if (!serviceAreas.length) return { allowed: true, distanceKm: null, radiusKm, mode: "LEGACY_UNSCOPED" as const };
+  return {
+    allowed: locationFit(project.location, serviceAreas) >= 70,
+    distanceKm: null,
+    radiusKm,
+    mode: "LEGACY_TEXT" as const,
+  };
+}
 
 export function geospatialRouter(database: Database, config: AppConfig) {
   const router = Router();
@@ -50,6 +103,87 @@ export function geospatialRouter(database: Database, config: AppConfig) {
       if (error instanceof GeocodingUnavailableError) return response.status(503).json({ error: error.message });
       next(error);
     }
+  });
+
+  // Intercepts professional discovery before the legacy marketplace route.
+  // Clients/admins continue to the existing implementation unchanged.
+  router.get("/projects", requireAuth, async (request, response, next) => {
+    try {
+      if (request.user!.role !== "profesional") return next();
+      const professionalArea = await loadProfessionalArea(database, request.user!.id);
+      if (!professionalArea) return next();
+      const rows = await database.query<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        project_type: string;
+        location: string;
+        budget_cents: string;
+        status: string;
+        created_at: string;
+        already_applied: boolean;
+        service_province: string | null;
+        service_locality: string | null;
+        latitude: number | string | null;
+        longitude: number | string | null;
+      }>(
+        `SELECT p.id, p.title, p.description, p.category, p.project_type, p.location, p.budget_cents,
+                p.status, p.created_at, p.service_province, p.service_locality, p.latitude, p.longitude,
+                EXISTS(
+                  SELECT 1 FROM proposals pr WHERE pr.project_id = p.id AND pr.professional_id = $1
+                ) AS already_applied
+           FROM projects p
+          WHERE p.status = 'PUBLICADO'
+            AND EXISTS (
+              SELECT 1 FROM professional_specialty_qualifications q
+               WHERE q.professional_id = $1
+                 AND q.specialty_slug = p.category
+                 AND q.verification_status = 'APROBADO'
+            )
+          ORDER BY p.created_at DESC LIMIT 250`,
+        [request.user!.id],
+      );
+      const projects = rows.rows.flatMap((project) => {
+        const decision = projectAreaDecision(project, professionalArea);
+        if (!decision.allowed) return [];
+        return [{
+          ...project,
+          distance_km: decision.distanceKm == null ? null : Number(decision.distanceKm.toFixed(1)),
+          matching_mode: decision.mode,
+          professional_radius_km: decision.radiusKm,
+        }];
+      }).slice(0, 100);
+      return response.json({ projects, radiusFiltered: true });
+    } catch (error) { next(error); }
+  });
+
+  // A manual API call cannot bypass the professional's configured working radius.
+  // The marketplace route still performs all billing, qualification and project-state checks afterwards.
+  router.post("/proposals", requireAuth, async (request, response, next) => {
+    try {
+      if (request.user!.role !== "profesional") return next();
+      const projectId = z.string().uuid().safeParse(request.body?.projectId);
+      if (!projectId.success) return next();
+      const [professionalArea, project] = await Promise.all([
+        loadProfessionalArea(database, request.user!.id),
+        database.query<ProjectArea>(
+          "SELECT location, latitude, longitude FROM projects WHERE id=$1",
+          [projectId.data],
+        ),
+      ]);
+      const projectRow = project.rows[0];
+      if (!professionalArea || !projectRow) return next();
+      const decision = projectAreaDecision(projectRow, professionalArea);
+      if (!decision.allowed) {
+        return response.status(403).json({
+          error: "El proyecto está fuera de tu radio de trabajo.",
+          radiusKm: decision.radiusKm,
+          distanceKm: decision.distanceKm == null ? null : Number(decision.distanceKm.toFixed(1)),
+        });
+      }
+      return next();
+    } catch (error) { next(error); }
   });
 
   // This route intentionally runs before the legacy operating-system matcher.
