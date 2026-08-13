@@ -14,6 +14,13 @@
       if (anchor) nav.insertBefore(link, anchor);
       else nav.append(link);
     };
+    if (window.location.pathname === "/") {
+      insert("/#como-funciona", "Cómo funciona");
+      insert("/servicios-hogar", "Limpieza y jardín");
+      insert("/#profesionales", "Profesionales");
+      insert("/para-profesionales", "Para profesionales");
+    }
+
     insert("/guia", "Guía y precios");
     insert("/opiniones", "Opiniones verificadas");
   }
