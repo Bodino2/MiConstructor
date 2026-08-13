@@ -1,0 +1,75 @@
+body:has(.guide-shell) > .topbar {
+  position: sticky !important;
+  top: 0;
+  z-index: 9999;
+  background: rgba(26, 29, 32, .98);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+body:has(.guide-shell) > .topbar .brand,
+body:has(.guide-shell) > .topbar .brand span,
+body:has(.guide-shell) > .topbar #main-nav > a,
+body:has(.guide-shell) > .topbar #main-nav > button { color: #fff; }
+body:has(.guide-shell) > .topbar .nav-item-dropdown { position: relative; list-style: none; }
+body:has(.guide-shell) > .topbar .dropdown-toggle {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.88);
+  font: inherit;
+  font-weight: 750;
+  padding: 10px 13px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+body:has(.guide-shell) > .topbar .dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 230px;
+  margin: 0;
+  padding: 10px 0;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+body:has(.guide-shell) > .topbar .nav-item-dropdown:hover .dropdown-menu,
+body:has(.guide-shell) > .topbar .nav-item-dropdown:focus-within .dropdown-menu { display: block; }
+body:has(.guide-shell) > .topbar .dropdown-menu a {
+  display: block;
+  padding: 8px 16px;
+  color: #1e293b !important;
+  text-decoration: none;
+  white-space: nowrap;
+}
+body:has(.guide-shell) > .topbar .dropdown-menu a:hover { background-color: #f1f5f9; }
+
+.guide-hero {
+  padding: clamp(28px, 4vw, 44px);
+  background: #ffffff;
+  border-color: #d0d0d0;
+  box-shadow: 0 10px 25px rgba(0,0,0,.06);
+}
+.guide-hero h1 {
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.12;
+  letter-spacing: -.035em;
+}
+.guide-hero p {
+  max-width: 850px;
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  line-height: 1.6;
+}
+.guide-shell .eyebrow,
+.guide-shell .guide-category,
+.guide-shell .guide-detail-price strong { color: #008758; }
+.guide-shell .button.primary {
+  border-color: #008758;
+  background: #008758;
+  color: #ffffff;
+}
+.guide-shell .button.primary:hover {
+  border-color: #006f49;
+  background: #006f49;
+}
