@@ -1,0 +1,112 @@
+.topbar nav.navbar-marketplace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  flex-wrap: nowrap;
+}
+
+.navbar-marketplace .nav-main-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.navbar-marketplace .nav-main-links li { margin: 0; padding: 0; }
+
+.navbar-marketplace .nav-main-links a,
+.navbar-marketplace .nav-actions > a,
+.navbar-marketplace .avatar-btn {
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.navbar-marketplace .nav-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.navbar-marketplace .link-pro {
+  color: rgba(255,255,255,.9);
+}
+
+.navbar-marketplace .btn-cta-green {
+  background: var(--mc-action);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0,135,88,.18);
+}
+
+.navbar-marketplace .btn-cta-green:hover {
+  background: var(--mc-action-hover);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.navbar-marketplace .user-avatar-dropdown {
+  position: relative;
+}
+
+.navbar-marketplace .avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+}
+
+.navbar-marketplace .user-account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 7px;
+  display: grid;
+  gap: 2px;
+  background: var(--mc-obsidian);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  box-shadow: 0 18px 38px rgba(0,0,0,.24);
+}
+
+.navbar-marketplace .user-account-menu[hidden] {
+  display: none;
+}
+
+.navbar-marketplace .user-account-menu a,
+.navbar-marketplace .user-account-menu button {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+@media (max-width: 1180px) {
+  .topbar nav.navbar-marketplace { gap: 8px; }
+  .navbar-marketplace .nav-main-links a,
+  .navbar-marketplace .nav-actions > a,
+  .navbar-marketplace .avatar-btn {
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar nav.navbar-marketplace {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .navbar-marketplace .nav-main-links,
+  .navbar-marketplace .nav-actions {
+    flex-wrap: wrap;
+  }
+}

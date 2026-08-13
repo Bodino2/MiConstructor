@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const cssUrl = new URL("../public/botanica-industrial.css", import.meta.url);
+const marketplaceNavCssUrl = new URL("../public/marketplace-navbar.css", import.meta.url);
 const homeUrl = new URL("../public/botanica-home.js", import.meta.url);
 const guideNavUrl = new URL("../public/guide-nav.js", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
@@ -93,4 +94,24 @@ test("la navegación completa permanece tras refrescar una sesión autenticada",
   assert.match(nav, /\/para-profesionales/);
   assert.match(nav, /\/guia/);
   assert.match(nav, /\/opiniones/);
+});
+
+test("la portada usa la navegación marketplace solicitada y separa acceso anónimo de cuenta autenticada", async () => {
+  const home = await readFile(homeUrl, "utf8");
+  const css = await readFile(marketplaceNavCssUrl, "utf8");
+
+  assert.match(home, /navbar-marketplace/);
+  assert.match(home, />Servicios <span aria-hidden="true">▾<\/span>/);
+  assert.match(home, />Cómo funciona<\/a>/);
+  assert.match(home, />Guía de precios<\/a>/);
+  assert.match(home, />Opiniones<\/a>/);
+  assert.match(home, />¿Eres profesional\?<\/a>/);
+  assert.match(home, />Pedir Presupuesto<\/a>/);
+  assert.match(home, />👤 Mi Cuenta <span aria-hidden="true">▾<\/span>/);
+  assert.match(home, />Mis Solicitudes<\/a>/);
+  assert.match(home, /id="logout">Salir<\/button>/);
+  assert.match(home, /class="nav-login">Entrar<\/a>/);
+  assert.match(css, /\.topbar nav\.navbar-marketplace[\s\S]*flex-wrap:\s*nowrap/);
+  assert.match(css, /\.btn-cta-green/);
+  assert.match(css, /\.user-account-menu\[hidden\]/);
 });
