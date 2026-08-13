@@ -33,6 +33,13 @@ test("deploy validates EnvironmentFile without sourcing secrets into the root sh
   assert.doesNotMatch(source, /source\s+["']?\$ENV_FILE/);
 });
 
+test("deploy only accepts the current GitHub main head", async () => {
+  const source = await deploySource();
+  assert.match(source, /git -C "\$RELEASE" fetch --quiet origin main/);
+  assert.match(source, /rev-parse origin\/main/);
+  assert.match(source, /SHA-ul cerut nu este HEAD-ul origin\/main/);
+});
+
 test("build always installs dev dependencies before TypeScript compilation", async () => {
   const source = await deploySource();
   assert.match(source, /NODE_ENV=development npm ci --include=dev/);
@@ -65,6 +72,12 @@ test("backup and migration happen before atomic activation with rollback", async
   assert.match(source, /current\.rollback/);
   assert.match(source, /ROLLBACK_START/);
   assert.match(source, /systemctl restart "\$SERVICE"/);
+});
+
+test("public smoke failure rolls back instead of leaving an ambiguous release live", async () => {
+  const source = await deploySource();
+  assert.match(source, /if ! public_smoke; then\s+rollback\s+fail "public smoke failed"/s);
+  assert.match(source, /PUBLIC_SMOKE_OK/);
 });
 
 test("successful deploy requires local and public smoke checks", async () => {
