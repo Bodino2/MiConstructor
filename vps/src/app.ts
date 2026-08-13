@@ -29,6 +29,7 @@ import { professionalVerificationRouter } from "./routes/professional-verificati
 import { publicDirectoryRouter } from "./routes/public-directory.js";
 import { unifiedAssessmentsRouter } from "./routes/unified-assessments.js";
 import { uploadsRouter } from "./routes/uploads.js";
+import { verifiedReviewsRouter } from "./routes/verified-reviews.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
 
@@ -121,6 +122,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
   app.use("/api/v1", writeLimiter, marketingRouter(database));
   app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
+  app.use("/api/v1", writeLimiter, verifiedReviewsRouter(database));
   app.use("/api/v1", writeLimiter, geospatialRouter(database, config));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, intelligenceRouter(database));
@@ -158,8 +160,6 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/registro-profesional",
     "/servicios-hogar",
     "/campana/:slug",
-    "/guia",
-    "/guia/:slug",
     "/panel",
     "/verificar-email",
     "/restablecer",
