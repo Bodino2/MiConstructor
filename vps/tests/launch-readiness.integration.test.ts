@@ -78,6 +78,30 @@ async function createUser(input: {
   );
 }
 
+async function approveProfessional(professionalId: string) {
+  const identityFileId = randomUUID();
+  const taxFileId = randomUUID();
+  await database.query(
+    `INSERT INTO stored_files
+      (id,owner_id,purpose,object_key,original_name,content_type,size_bytes,sha256,moderation_status)
+     VALUES
+      ($1,$3,'VERIFICACION_PROFESIONAL',$4,'identidad.pdf','application/pdf',1,$6,'APROBADO'),
+      ($2,$3,'VERIFICACION_PROFESIONAL',$5,'situacion-fiscal.pdf','application/pdf',1,$6,'APROBADO')`,
+    [identityFileId, taxFileId, professionalId, `launch/${identityFileId}`, `launch/${taxFileId}`, "a".repeat(64)],
+  );
+  await database.query(
+    `INSERT INTO professional_verification_documents
+      (id,professional_id,file_id,document_type,status,reviewed_at)
+     VALUES
+      ($1,$3,$4,'IDENTIDAD','APROBADO',now()),
+      ($2,$3,$5,'SITUACION_FISCAL','APROBADO',now())`,
+    [randomUUID(), randomUUID(), professionalId, identityFileId, taxFileId],
+  );
+  await database.query("UPDATE users SET verification_status='APROBADO' WHERE id=$1", [professionalId]);
+  const status = await database.query<{ verification_status: string }>("SELECT verification_status FROM users WHERE id=$1", [professionalId]);
+  assert.equal(status.rows[0]?.verification_status, "APROBADO");
+}
+
 async function login(email: string, password: string) {
   const agent = request.agent(application);
   const response = await agent.post("/api/v1/auth/login").send({ email, password });
@@ -110,6 +134,7 @@ test("launch smoke: 20/45/80 km, review verificat și funnel QR", async () => {
      VALUES ($1,$2,'electricidad','Electricidad',true,'launch-v1',15,95,now(),'APROBADO')`,
     [randomUUID(), professionalId],
   );
+  await approveProfessional(professionalId);
   await database.query(
     `INSERT INTO billing_accounts
       (professional_id,status,stripe_customer_id,stripe_payment_method_id)
@@ -158,16 +183,22 @@ test("launch smoke: 20/45/80 km, review verificat și funnel QR", async () => {
   const proposalId = randomUUID();
   await database.query(
     `INSERT INTO projects
-      (id,owner_id,title,description,category,project_type,location,square_meters,quality_level,budget_cents,status,assigned_professional_id,
+      (id,owner_id,title,description,category,project_type,location,square_meters,quality_level,budget_cents,status,
        service_province,service_locality,latitude,longitude,geocoded_at,search_radius_km)
-     VALUES ($1,$2,'Reforma verificada Linares','Proyecto finalizado para validar opiniones públicas verificadas.','electricidad','bano','Linares, Jaén',5,'estandar',325000,'FINALIZADO',$3,'Jaén','Linares',38.095,-3.636,now(),50)`,
-    [reviewProjectId, clientId, professionalId],
+     VALUES ($1,$2,'Reforma verificada Linares','Proyecto finalizado para validar opiniones públicas verificadas.','electricidad','bano','Linares, Jaén',5,'estandar',325000,'PUBLICADO','Jaén','Linares',38.095,-3.636,now(),50)`,
+    [reviewProjectId, clientId],
   );
   await database.query(
     `INSERT INTO proposals
       (id,project_id,professional_id,amount_cents,estimated_days,message,status)
-     VALUES ($1,$2,$3,300000,5,'Presupuesto final aceptado para el smoke test de reseñas.','ACEPTADA')`,
+     VALUES ($1,$2,$3,300000,5,'Presupuesto final aceptado para el smoke test de reseñas.','ENVIADA')`,
     [proposalId, reviewProjectId, professionalId],
+  );
+  await database.query(
+    `INSERT INTO shortlists
+      (id,project_id,client_id,professional_id,project_budget_cents,fee_cents,pricing_version,contact_unlocked_at)
+     VALUES ($1,$2,$3,$4,325000,10000,'launch-qa',now())`,
+    [randomUUID(), reviewProjectId, clientId, professionalId],
   );
   await database.query(
     `INSERT INTO work_contracts
@@ -176,6 +207,8 @@ test("launch smoke: 20/45/80 km, review verificat și funnel QR", async () => {
      VALUES ($1,$2,$3,$4,$5,'Reforma verificada Linares','Proyecto finalizado para QA','Linares, Jaén','electricidad',300000,5,'Presupuesto aceptado','FINALIZADO',now())`,
     [randomUUID(), reviewProjectId, proposalId, clientId, professionalId],
   );
+  await database.query("UPDATE proposals SET status='ACEPTADA' WHERE id=$1", [proposalId]);
+  await database.query("UPDATE projects SET status='FINALIZADO',assigned_professional_id=$2 WHERE id=$1", [reviewProjectId, professionalId]);
 
   const clientAgent = await login("launch-client@example.es", clientPassword);
   const review = await clientAgent.post(`/api/v1/projects/${reviewProjectId}/public-review`).send({
