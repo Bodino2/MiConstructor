@@ -4,6 +4,7 @@
 
   function ensurePublicContentLinks() {
     if (window.location.pathname.startsWith("/guia") || window.location.pathname === "/opiniones") return;
+    if (nav.classList.contains("navbar-marketplace")) return;
     if (!nav.children.length) return;
     const anchor = nav.querySelector('a[href="/login"], a.primary, button');
     const insert = (href, label) => {
