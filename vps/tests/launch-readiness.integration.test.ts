@@ -69,7 +69,7 @@ async function createUser(input: {
       input.id, input.email, input.name, hash, input.role, input.taxId,
       input.verification ?? (input.role === "profesional" ? "APROBADO" : "NO_APLICA"),
       input.latitude == null ? null : "Jaén",
-      input.latitude == null ? null : "Linares",
+      input.latitude == null ? null : "Base QA",
       input.radiusKm ?? 50,
       input.latitude ?? null,
       input.longitude ?? null,
@@ -91,6 +91,13 @@ test("launch smoke: 20/45/80 km, review verificat și funnel QR", async () => {
   const clientPassword = "Client-Launch-2026-Test";
   const professionalPassword = "Pro-Launch-2026-Test";
   const adminPassword = "Admin-Launch-2026-Test";
+
+  await database.query(
+    `INSERT INTO geo_location_cache
+      (area_key,province,locality,latitude,longitude,formatted_address,provider,resolved_at)
+     VALUES ('jaén|base qa','Jaén','Base QA',0,0,'Base QA, Jaén, España','geoapify',now())
+     ON CONFLICT (area_key) DO UPDATE SET latitude=0,longitude=0,resolved_at=now()`,
+  );
 
   await createUser({ id: clientId, email: "launch-client@example.es", password: clientPassword, role: "cliente", name: "Cliente Launch", taxId: `C-${clientId}` });
   await createUser({ id: professionalId, email: "launch-pro@example.es", password: professionalPassword, role: "profesional", name: "Profesional Launch", taxId: `P-${professionalId}`, verification: "APROBADO", latitude: 0, longitude: 0, radiusKm: 50 });
