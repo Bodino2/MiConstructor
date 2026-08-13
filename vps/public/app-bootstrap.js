@@ -3,6 +3,7 @@ const DEDICATED_ROUTE_PATHS = new Set([
   "/registro-cliente",
   "/para-profesionales",
   "/registro-profesional",
+  "/publicar",
   "/servicios-hogar",
 ]);
 

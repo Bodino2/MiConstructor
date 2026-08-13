@@ -158,6 +158,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/registro-cliente",
     "/para-profesionales",
     "/registro-profesional",
+    "/publicar",
     "/servicios-hogar",
     "/campana/:slug",
     "/panel",

@@ -103,7 +103,7 @@ function verifiedReviewsHtml(rows: PublicReviewRow[]) {
     <meta name="robots" content="index,follow" />
     <link rel="icon" href="/favicon.svg" /><link rel="stylesheet" href="/styles.css" /><link rel="stylesheet" href="/site-shell.css" /><link rel="stylesheet" href="/verified-reviews.css" />
   </head><body>
-    <header class="topbar"><a class="brand" href="/"><img src="/miconstructor-mark.svg" alt="" /><span>MiConstructor</span></a><nav><a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/opiniones">Opiniones verificadas</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a></nav></header>
+    <header class="topbar"><a class="brand" href="/"><img src="/miconstructor-mark.svg" alt="" /><span>MiConstructor</span></a><nav id="main-nav" aria-label="Navegación principal"><li class="nav-item-dropdown"><button class="dropdown-toggle" type="button">Servicios ▾</button><ul class="dropdown-menu"><li><a href="/publicar?servicio=reformas">🔨 Reformas Integrales</a></li><li><a href="/publicar?servicio=limpieza">🧹 Limpieza</a></li><li><a href="/publicar?servicio=jardineria">🌳 Jardinería</a></li></ul></li><a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/opiniones">Opiniones verificadas</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a></nav></header>
     <main class="verified-reviews-shell"><header class="verified-reviews-hero"><span class="eyebrow">TRABAJOS REALES · RESEÑAS VERIFICADAS</span><h1>Opiniones vinculadas a proyectos finalizados.</h1><p>No compramos testimonios ni mostramos reseñas anónimas sin trazabilidad. Una opinión pública procede de un cliente con un proyecto finalizado y consentimiento explícito para publicarla.</p></header><section class="verified-reviews-list">${cards}</section></main>
   </body></html>`;
 }
@@ -157,7 +157,6 @@ export function marketingRedirectRouter(database: Database) {
       if (!parsed.success) return response.status(404).type("text/plain").send("Campaña no encontrada.");
       const campaign = await activeCampaignByCode(database, parsed.data);
       if (!campaign) return response.status(404).type("text/plain").send("Campaña no encontrada.");
-
       await database.query(
         `INSERT INTO marketing_events (campaign_id, event_type, path)
          VALUES ($1, 'QR_SCAN', $2)`,

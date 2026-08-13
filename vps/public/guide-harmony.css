@@ -86,21 +86,21 @@ body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) #app[dat
 }
 
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar {
-  background: #ffffff !important;
-  border-bottom-color: #d0d0d0 !important;
+  background: #1a1d20 !important;
+  border-bottom-color: rgba(255,255,255,.08) !important;
 }
 
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .brand,
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .brand span,
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a,
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-toggle {
-  color: #1a1d20 !important;
+  color: #ffffff !important;
 }
 
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a:not(.primary):hover,
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-toggle:hover {
   color: var(--mc-action) !important;
-  background: rgba(0, 135, 88, 0.06) !important;
+  background: rgba(255,255,255,.06) !important;
 }
 
 body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a.primary {
@@ -163,3 +163,13 @@ body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-c
   font-size: 0.875rem !important;
   line-height: 1.5;
 }
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell){--mc-action:#008758;--mc-action-hover:#006f49;background:#ffffff!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) #app[data-guide-ssr="true"],body:has(#app[data-guide-ssr="true"] > .guide-shell) #app[data-guide-ssr="true"]>.guide-shell{background:#ffffff!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-category,body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .eyebrow,body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-detail-price strong{color:var(--mc-action)!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-card,body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-detail-main,body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-cta-card,body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .guide-not-found{background:#ffffff!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .button:not(.primary){border-color:var(--mc-action)!important;background:#ffffff!important;color:var(--mc-action)!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .button:not(.primary):hover{border-color:var(--mc-action-hover)!important;background:#f6faf8!important;color:var(--mc-action-hover)!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .button.primary{border-color:var(--mc-action)!important;background:var(--mc-action)!important;color:#ffffff!important}
+body:has(#app[data-guide-ssr="true"] > .guide-shell) .guide-shell .button.primary:hover{border-color:var(--mc-action-hover)!important;background:var(--mc-action-hover)!important;color:#ffffff!important}
+@media(max-width:760px){body:has(#app[data-guide-ssr="true"] > .guide-shell)>.topbar .dropdown-menu{left:auto;right:0;min-width:min(230px,calc(100vw - 24px));max-width:calc(100vw - 24px)}}
