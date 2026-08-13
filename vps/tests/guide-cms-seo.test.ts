@@ -91,7 +91,7 @@ test("CMS are schemă, CRUD admin, draft/publicare și seed-urile inițiale", as
   assert.match(migration, /reforma-cocina-7m2/);
   assert.match(migration, /reforma-salon-25m2/);
   assert.match(migration, /reforma-integral-80m2/);
-  assert.match(route, /POST[\s\S]*admin\/guide\/articles/);
+  assert.match(route, /router\.post\("\/api\/v1\/admin\/guide\/articles"/);
   assert.match(route, /router\.put\("\/api\/v1\/admin\/guide\/articles\/:id"/);
   assert.match(route, /router\.delete\("\/api\/v1\/admin\/guide\/articles\/:id"/);
   assert.match(route, /requireRole\("admin"\)/);
