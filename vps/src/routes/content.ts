@@ -115,7 +115,7 @@ function layout(config: AppConfig, input: {
     <link rel="stylesheet" href="/styles.css" /><link rel="stylesheet" href="/site-shell.css" /><link rel="stylesheet" href="/guide.css" /><link rel="stylesheet" href="/guide-harmony.css" />
     ${jsonLd}
   </head><body>
-    <header class="topbar"><a class="brand" href="/"><img src="/miconstructor-mark.svg" alt="" /><span>MiConstructor</span></a><nav id="main-nav" aria-label="Navegación principal"><li class="nav-item-dropdown"><button class="dropdown-toggle" type="button">Servicios ▾</button><ul class="dropdown-menu"><li><a href="/registro-cliente">🔨 Reformas Integrales</a></li><li><a href="/registro-cliente">🧹 Limpieza</a></li><li><a href="/registro-cliente">🌳 Jardinería</a></li></ul></li><a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a></nav></header>
+    <header class="topbar"><a class="brand" href="/"><img src="/miconstructor-mark.svg" alt="" /><span>MiConstructor</span></a><nav id="main-nav" aria-label="Navegación principal"><li class="nav-item-dropdown"><button class="dropdown-toggle" type="button">Servicios ▾</button><ul class="dropdown-menu"><li><a href="/#servicios">🔨 Reformas Integrales</a></li><li><a href="/servicios-hogar#limpieza">🧹 Limpieza</a></li><li><a href="/servicios-hogar#jardin">🌳 Jardinería</a></li></ul></li><a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a></nav></header>
     <main id="app" data-guide-ssr="true">${input.body}</main>
   </body></html>`;
 }
