@@ -19,11 +19,15 @@ fail() {
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "primul argument trebuie sa fie SHA-ul complet de 40 caractere"
 [[ -r "$ENV_FILE" ]] || fail "nu pot citi $ENV_FILE"
 command -v systemd-run >/dev/null || fail "systemd-run lipseste"
+command -v systemctl >/dev/null || fail "systemctl lipseste"
 command -v runuser >/dev/null || fail "runuser lipseste"
 command -v curl >/dev/null || fail "curl lipseste"
 command -v git >/dev/null || fail "git lipseste"
 command -v npm >/dev/null || fail "npm lipseste"
 command -v pg_dump >/dev/null || fail "pg_dump lipseste"
+command -v tar >/dev/null || fail "tar lipseste"
+command -v zstd >/dev/null || fail "zstd lipseste"
+command -v ss >/dev/null || fail "ss lipseste"
 
 RELEASE="$BASE/releases/$SHA"
 PREVIOUS="$(readlink -f "$BASE/current" 2>/dev/null || true)"
@@ -33,7 +37,6 @@ BACKUP_DB_UNIT="miconstructor-backup-$TAG"
 MIGRATE_UNIT="miconstructor-migrate-$TAG"
 PRELIVE_UNIT="miconstructor-prelive-$TAG"
 PRELIVE_STARTED=false
-SWITCHED=false
 
 cleanup() {
   if [[ "$PRELIVE_STARTED" == true ]]; then
@@ -125,15 +128,15 @@ prepare_release() {
   fi
 
   chown -R miconstructor:miconstructor "$RELEASE"
-  local remote
+  local remote remote_main actual
   remote="$(runuser -u miconstructor -- git -C "$RELEASE" remote get-url origin)"
   [[ "$remote" == "$REPO_URL" ]] || fail "origin neasteptat: $remote"
 
   runuser -u miconstructor -- git -C "$RELEASE" fetch --quiet origin main
-  runuser -u miconstructor -- git -C "$RELEASE" cat-file -e "$SHA^{commit}"
-  runuser -u miconstructor -- git -C "$RELEASE" checkout --quiet --detach "$SHA"
+  remote_main="$(runuser -u miconstructor -- git -C "$RELEASE" rev-parse origin/main)"
+  [[ "$remote_main" == "$SHA" ]] || fail "SHA-ul cerut nu este HEAD-ul origin/main: $remote_main"
 
-  local actual
+  runuser -u miconstructor -- git -C "$RELEASE" checkout --quiet --detach "$SHA"
   actual="$(runuser -u miconstructor -- git -C "$RELEASE" rev-parse HEAD)"
   [[ "$actual" == "$SHA" ]] || fail "checkout SHA mismatch: $actual"
   echo "RELEASE_SHA_OK=$actual"
@@ -217,7 +220,6 @@ rollback() {
 activate_release() {
   ln -sfn "$RELEASE" "$BASE/current.new"
   mv -Tf "$BASE/current.new" "$BASE/current"
-  SWITCHED=true
   echo "CURRENT=$(readlink -f "$BASE/current")"
 
   if ! systemctl restart "$SERVICE"; then
@@ -234,13 +236,13 @@ activate_release() {
 }
 
 public_smoke() {
-  curl -fsS --max-time 8 https://miconstructor.es/health/ready >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/ >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/guia >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/opiniones >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/qr/espana-clientes-v1.svg >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/qr/espana-profesionales-v1.svg >/dev/null
-  curl -fsS --max-time 8 https://miconstructor.es/guide-nav.js | grep -Fq '/#como-funciona'
+  curl -fsS --max-time 8 https://miconstructor.es/health/ready >/dev/null || return 1
+  curl -fsS --max-time 8 https://miconstructor.es/ >/dev/null || return 1
+  curl -fsS --max-time 8 https://miconstructor.es/guia >/dev/null || return 1
+  curl -fsS --max-time 8 https://miconstructor.es/opiniones >/dev/null || return 1
+  curl -fsS --max-time 8 https://miconstructor.es/qr/espana-clientes-v1.svg >/dev/null || return 1
+  curl -fsS --max-time 8 https://miconstructor.es/qr/espana-profesionales-v1.svg >/dev/null || return 1
+  { curl -fsS --max-time 8 https://miconstructor.es/guide-nav.js | grep -Fq '/#como-funciona'; } || return 1
   echo "PUBLIC_SMOKE_OK"
 }
 
@@ -255,7 +257,10 @@ backup_before_migration
 migrate_release
 prelive_release
 activate_release
-public_smoke
+if ! public_smoke; then
+  rollback
+  fail "public smoke failed"
+fi
 
 echo "=========================================="
 echo "MICONSTRUCTOR_DEPLOY_OK"
