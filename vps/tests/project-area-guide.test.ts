@@ -19,6 +19,7 @@ const indexUrl = new URL("../public/index.html", import.meta.url);
 const bootstrapUrl = new URL("../public/app-bootstrap.js", import.meta.url);
 const appUrl = new URL("../src/app.ts", import.meta.url);
 const registrationAreaUrl = new URL("../public/marketing-registration-area.js", import.meta.url);
+const neutralReferencesMigrationUrl = new URL("../migrations/016_neutralize_guide_price_references.sql", import.meta.url);
 
 const config = { GEOAPIFY_API_KEY: "g".repeat(32) } as AppConfig;
 
@@ -147,13 +148,14 @@ test("schema y UI separan zona base de zona específica del proyecto", async () 
   assert.match(index, /geo-preferences-ui\.js/);
 });
 
-test("Guía MiConstructor publica casos orientativos con fuentes y sin reseñas inventadas", async () => {
-  const [guide, css, index, bootstrap, appSource] = await Promise.all([
+test("Guía MiConstructor publica casos orientativos sin referencias a marketplaces externos", async () => {
+  const [guide, css, index, bootstrap, appSource, neutralReferencesMigration] = await Promise.all([
     readFile(guideUiUrl, "utf8"),
     readFile(guideCssUrl, "utf8"),
     readFile(indexUrl, "utf8"),
     readFile(bootstrapUrl, "utf8"),
     readFile(appUrl, "utf8"),
+    readFile(neutralReferencesMigrationUrl, "utf8"),
   ]);
   for (const slug of ["reforma-bano-5m2", "reforma-cocina-7m2", "reforma-salon-25m2", "reforma-integral-80m2"]) {
     assert.match(guide, new RegExp(slug));
@@ -163,9 +165,12 @@ test("Guía MiConstructor publica casos orientativos con fuentes y sin reseñas 
   assert.match(guide, /5\.600 € – 9\.000 €/);
   assert.match(guide, /1\.345 € – 5\.065 €/);
   assert.match(guide, /32\.000 € – 64\.000 €/);
-  assert.match(guide, /Habitissimo/);
-  assert.match(guide, /Cronoshare/);
+  assert.match(guide, /Precios de mercado consultados en España/);
   assert.match(guide, /Los importes son orientativos y no sustituyen un presupuesto profesional/);
+  assert.doesNotMatch(guide, /Habitissimo|Cronoshare|Plan Reforma|PlanReforma/i);
+  assert.match(neutralReferencesMigration, /Precios de mercado consultados en España/);
+  assert.match(neutralReferencesMigration, /source_url\s*=\s*NULL/i);
+  assert.doesNotMatch(neutralReferencesMigration, /Habitissimo|Cronoshare|Plan Reforma|PlanReforma/i);
   assert.match(css, /guide-grid/);
   assert.match(index, /guide-ui\.js/);
   assert.match(index, /guide-nav\.js/);
