@@ -8,6 +8,13 @@ ALTER TABLE reviews
     NOT public_price_consent OR publication_consent
   );
 
+-- Existing rows predate explicit publication consent. Fail closed: any previously
+-- visible review is resealed until the author explicitly opts in through the new flow.
+UPDATE reviews
+   SET status='SELLADA', published_at=NULL
+ WHERE status='PUBLICADA'
+   AND publication_consent=false;
+
 CREATE OR REPLACE FUNCTION enforce_review_publication_consent()
 RETURNS trigger
 LANGUAGE plpgsql
