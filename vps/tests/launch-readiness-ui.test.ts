@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const migrationUrl = new URL("../migrations/015_verified_reviews_publication.sql", import.meta.url);
-const publicDirectoryUrl = new URL("../src/routes/public-directory.ts", import.meta.url);
+const verifiedReviewsRouteUrl = new URL("../src/routes/verified-reviews.ts", import.meta.url);
 const marketingRouteUrl = new URL("../src/routes/marketing.ts", import.meta.url);
 const reviewUiUrl = new URL("../public/verified-reviews-ui.js", import.meta.url);
 const marketingUiUrl = new URL("../public/admin-marketing-ui.js", import.meta.url);
@@ -15,7 +15,7 @@ const guideNavUrl = new URL("../public/guide-nav.js", import.meta.url);
 test("opiniile verificate cer consimțământ explicit și datele vechi sunt sigilate", async () => {
   const [migration, route] = await Promise.all([
     readFile(migrationUrl, "utf8"),
-    readFile(publicDirectoryUrl, "utf8"),
+    readFile(verifiedReviewsRouteUrl, "utf8"),
   ]);
   assert.match(migration, /publication_consent boolean NOT NULL DEFAULT false/);
   assert.match(migration, /public_price_consent boolean NOT NULL DEFAULT false/);
