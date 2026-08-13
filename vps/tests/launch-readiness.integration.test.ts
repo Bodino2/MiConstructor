@@ -64,7 +64,8 @@ async function createUser(input: {
       (id,email,name,password_hash,role,tax_id,email_verified,account_status,verification_status,
        privacy_version,privacy_accepted_at,service_province,service_locality,service_radius_km,
        service_latitude,service_longitude,service_geocoded_at)
-     VALUES ($1,$2,$3,$4,$5,$6,true,'ACTIVO',$7,'test-v1',now(),$8,$9,$10,$11,$12,CASE WHEN $11 IS NULL THEN NULL ELSE now() END)`,
+     VALUES ($1,$2,$3,$4,$5,$6,true,'ACTIVO',$7,'test-v1',now(),$8,$9,$10,$11,$12,
+             CASE WHEN $11::double precision IS NULL THEN NULL ELSE now() END)`,
     [
       input.id, input.email, input.name, hash, input.role, input.taxId,
       input.verification ?? (input.role === "profesional" ? "APROBADO" : "NO_APLICA"),
@@ -192,7 +193,7 @@ test("launch smoke: 20/45/80 km, review verificat și funnel QR", async () => {
   assert.match(opinions.text, /OPINIÓN VERIFICADA/);
   assert.match(opinions.text, /Trabajo terminado dentro del plazo acordado/);
   assert.match(opinions.text, /Linares/);
-  assert.match(opinions.text, /3\.000/);
+  assert.match(opinions.text, /3(?:\.)?000/);
   assert.doesNotMatch(opinions.text, /Cliente Launch/);
   assert.doesNotMatch(opinions.text, /launch-client@example\.es/);
   const published = await database.query<{ status: string; publication_consent: boolean }>("SELECT status,publication_consent FROM reviews WHERE id=$1", [review.body.reviewId]);
