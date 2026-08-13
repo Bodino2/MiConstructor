@@ -73,3 +73,93 @@ body:has(.guide-shell) > .topbar .dropdown-menu a:hover { background-color: #f1f
   border-color: #006f49;
   background: #006f49;
 }
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) {
+  --mc-action: #008758;
+  --mc-action-hover: #006F49;
+  background: #ffffff;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) #app[data-guide-ssr="true"],
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) #app[data-guide-ssr="true"] > .guide-shell {
+  background: #ffffff;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar {
+  background: #ffffff !important;
+  border-bottom-color: #d0d0d0 !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .brand,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .brand span,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-toggle {
+  color: #1a1d20 !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a:not(.primary):hover,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-toggle:hover {
+  color: var(--mc-action) !important;
+  background: rgba(0, 135, 88, 0.06) !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a.primary {
+  background: var(--mc-action) !important;
+  color: #ffffff !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar #main-nav > a.primary:hover {
+  background: var(--mc-action-hover) !important;
+  color: #ffffff !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-menu a {
+  color: #1a1d20 !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) > .topbar .dropdown-menu a:hover {
+  color: var(--mc-action) !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-shell .eyebrow,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-shell .guide-category {
+  color: var(--mc-action) !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-shell .button.primary {
+  border-color: var(--mc-action) !important;
+  background: var(--mc-action) !important;
+  color: #ffffff !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-shell .button.primary:hover {
+  border-color: var(--mc-action-hover) !important;
+  background: var(--mc-action-hover) !important;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-card {
+  background: #ffffff;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-section-head h2 {
+  font-size: 1.75rem !important;
+  margin-bottom: 20px;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-card h2 {
+  font-size: 1.25rem !important;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-card .guide-price {
+  font-size: 1.5rem !important;
+  color: #0f172a;
+  margin: 12px 0;
+}
+
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-card p,
+body:has(#app[data-guide-ssr="true"] > .guide-shell:not(.guide-detail)) .guide-card .button {
+  font-size: 0.875rem !important;
+  line-height: 1.5;
+}
