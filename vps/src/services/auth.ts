@@ -11,6 +11,9 @@ export type AuthUser = {
   emailVerified: boolean;
   accountStatus: string;
   verificationStatus: string;
+  serviceProvince?: string | null;
+  serviceLocality?: string | null;
+  serviceRadiusKm?: number;
 };
 
 declare global {
@@ -86,6 +89,9 @@ export function authentication(database: Database, config: AppConfig) {
         email_verified: boolean;
         account_status: string;
         verification_status: string;
+        service_province: string | null;
+        service_locality: string | null;
+        service_radius_km: number;
       }>(
         `WITH active_session AS (
            UPDATE auth_sessions
@@ -96,7 +102,8 @@ export function authentication(database: Database, config: AppConfig) {
             RETURNING user_id
          )
          SELECT u.id, u.email, u.name, u.role, u.email_verified,
-                u.account_status, u.verification_status
+                u.account_status, u.verification_status,
+                u.service_province, u.service_locality, u.service_radius_km
            FROM active_session s
            JOIN users u ON u.id = s.user_id`,
         [tokenHash],
@@ -111,6 +118,9 @@ export function authentication(database: Database, config: AppConfig) {
           emailVerified: row.email_verified,
           accountStatus: row.account_status,
           verificationStatus: row.verification_status,
+          serviceProvince: row.service_province,
+          serviceLocality: row.service_locality,
+          serviceRadiusKm: Number(row.service_radius_km || 50),
         };
         request.sessionTokenHash = tokenHash;
       }

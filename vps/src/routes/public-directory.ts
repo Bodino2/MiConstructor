@@ -48,7 +48,9 @@ export function publicDirectoryRouter(database: Database) {
              SELECT round(avg(rating)::numeric, 1) AS rating,
                     count(*)::bigint AS review_count
                FROM reviews
-              WHERE subject_id = u.id AND status = 'PUBLICADA'
+              WHERE subject_id = u.id
+                AND status = 'PUBLICADA'
+                AND publication_consent = true
            ) reviews ON true
           WHERE u.role = 'profesional'
             AND u.account_status = 'ACTIVO'

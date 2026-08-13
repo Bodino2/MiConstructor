@@ -13,12 +13,15 @@ import { adminBillingRouter } from "./routes/admin-billing.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { billingRouter, stripeClient, stripeWebhookHandler } from "./routes/billing.js";
+import { contentRouter } from "./routes/content.js";
 import { evidenceUploadsRouter } from "./routes/evidence-uploads.js";
 import { executionRouter } from "./routes/execution.js";
+import { geospatialRouter } from "./routes/geospatial.js";
 import { homeServicesLifecycleRouter } from "./routes/home-services-lifecycle.js";
 import { homeServicesRouter } from "./routes/home-services.js";
 import { intelligenceRouter } from "./routes/intelligence.js";
 import { legalSupportRouter, registrationLegalGate, sepaLegalGate } from "./routes/legal-support.js";
+import { marketingRedirectRouter, marketingRouter } from "./routes/marketing.js";
 import { marketplaceRouter } from "./routes/marketplace.js";
 import { mobileAuthRouter } from "./routes/mobile-auth.js";
 import { operatingSystemRouter } from "./routes/operating-system.js";
@@ -26,6 +29,7 @@ import { professionalVerificationRouter } from "./routes/professional-verificati
 import { publicDirectoryRouter } from "./routes/public-directory.js";
 import { unifiedAssessmentsRouter } from "./routes/unified-assessments.js";
 import { uploadsRouter } from "./routes/uploads.js";
+import { verifiedReviewsRouter } from "./routes/verified-reviews.js";
 import { authentication, originProtection } from "./services/auth.js";
 import type { PrivateStorage } from "./services/storage.js";
 
@@ -95,6 +99,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use(cookieParser());
   app.use(authentication(database, config));
   app.use(originProtection(config));
+  app.use(marketingRedirectRouter(database));
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -115,7 +120,10 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.post("/api/v1/auth/register", registrationLegalGate);
   app.use("/api/v1/auth", authLimiter, mobileAuthRouter(database, config));
   app.use("/api/v1/auth", authLimiter, authRouter(database, config));
+  app.use("/api/v1", writeLimiter, marketingRouter(database));
   app.use("/api/v1", writeLimiter, unifiedAssessmentsRouter(database));
+  app.use("/api/v1", writeLimiter, verifiedReviewsRouter(database));
+  app.use("/api/v1", writeLimiter, geospatialRouter(database, config));
   app.use("/api/v1", writeLimiter, marketplaceRouter(database, config, stripe));
   app.use("/api/v1", writeLimiter, intelligenceRouter(database));
   app.use("/api/v1", writeLimiter, executionRouter(database));
@@ -130,6 +138,10 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1", writeLimiter, legalSupportRouter(database));
   app.use("/api/v1", writeLimiter, adminBillingRouter(database));
   app.use("/api/v1", writeLimiter, adminRouter(database));
+
+  // Public Guía HTML, sitemap/robots and admin CMS API share one source of truth.
+  // It is mounted before the static SPA fallback so crawlers receive real article HTML and metadata.
+  app.use(contentRouter(database, config));
 
   const publicDir = join(process.cwd(), "public");
   app.use(express.static(publicDir, {
@@ -147,6 +159,7 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
     "/para-profesionales",
     "/registro-profesional",
     "/servicios-hogar",
+    "/campana/:slug",
     "/panel",
     "/verificar-email",
     "/restablecer",
