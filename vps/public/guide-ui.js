@@ -17,9 +17,9 @@
       summary: "Demolición, revestimientos, sanitarios e instalaciones en un baño estándar, sin cambios estructurales complejos.",
       scope: ["Demolición y retirada", "Revestimientos y pavimento", "Fontanería y electricidad habituales", "Sanitarios y grifería de gama media"],
       caveats: "Mover bajantes, elegir mamparas o sanitarios premium, problemas de humedad o instalaciones muy antiguas puede elevar el presupuesto.",
-      source: "Habitissimo · Precios para reformas de baños en 2026",
+      source: "Precios de mercado consultados en España",
       sourceDate: "consulta agosto 2026",
-      sourceUrl: "https://www.habitissimo.es/presupuestos/reformas-banos",
+      sourceUrl: null,
     },
     {
       slug: "reforma-cocina-7m2",
@@ -30,9 +30,9 @@
       summary: "Reforma de cocina compacta con demolición, revestimientos, mobiliario básico y actualización de instalaciones.",
       scope: ["Demolición y desescombro", "Suelo y revestimientos", "Mobiliario de gama media", "Fontanería y electricidad", "Montaje básico"],
       caveats: "Encimeras especiales, electrodomésticos de alta gama, muebles a medida o cambios de distribución pueden llevar el coste por encima del rango.",
-      source: "Habitissimo · Guía de precios de reformas de cocinas",
+      source: "Precios de mercado consultados en España",
       sourceDate: "referencia consultada en agosto 2026",
-      sourceUrl: "https://www.habitissimo.es/presupuestos/reformas-cocinas",
+      sourceUrl: null,
     },
     {
       slug: "reforma-salon-25m2",
@@ -43,9 +43,9 @@
       summary: "Ejemplo con derribo de un tabique no estructural, estantería de pladur, suelo vinílico, pintura y lacado de dos puertas.",
       scope: ["Tabique: 250–800 €", "Pladur: 500–1.500 €", "Suelo vinílico: 225–1.750 €", "Pintura: 250–875 €", "Dos puertas: 120–140 €"],
       caveats: "Si el tabique es estructural, se modifica fachada o se incorporan carpinterías, climatización o muebles a medida, el proyecto cambia sustancialmente.",
-      source: "Cronoshare · Precio de reformar un salón (25 m²)",
+      source: "Precios de mercado consultados en España",
       sourceDate: "12 enero 2026",
-      sourceUrl: "https://www.cronoshare.com/cuanto-cuesta/reformar-salon",
+      sourceUrl: null,
     },
     {
       slug: "reforma-integral-80m2",
@@ -56,9 +56,9 @@
       summary: "Escenario para una vivienda de 80 m² con renovación amplia de acabados e instalaciones, comparando dos niveles de calidad.",
       scope: ["Calidad baja-media: 32.000–48.000 €", "Calidad media-alta: 48.000–64.000 €", "Incluye varias partidas de obra e instalaciones", "No presupone patologías estructurales"],
       caveats: "Estructura, redistribuciones importantes, ventanas, aislamiento, instalaciones especiales, licencias o acabados premium pueden elevar el coste.",
-      source: "Habitissimo · Precios de reformas de viviendas 2026",
+      source: "Precios de mercado consultados en España",
       sourceDate: "actualizado 10 junio 2026",
-      sourceUrl: "https://www.habitissimo.es/presupuestos/reformas-viviendas",
+      sourceUrl: null,
     },
   ];
 
@@ -68,7 +68,7 @@
   }
 
   function sourceNote(item) {
-    return `<p class="guide-source">Fuente de referencia: <a href="${item.sourceUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.source)}</a> · ${escapeHtml(item.sourceDate)}. Los importes son orientativos y no sustituyen un presupuesto profesional.</p>`;
+    return `<p class="guide-source">Referencia orientativa: ${escapeHtml(item.source)} · ${escapeHtml(item.sourceDate)}. Los importes son orientativos y no sustituyen un presupuesto profesional.</p>`;
   }
 
   function card(item) {
@@ -93,7 +93,7 @@
       </header>
       <section class="guide-principles">
         <article><strong>Rangos, no promesas</strong><span>Una obra real depende de estado previo, ciudad, materiales y alcance.</span></article>
-        <article><strong>Fuentes identificadas</strong><span>Indicamos la referencia utilizada y cuándo fue consultada.</span></article>
+        <article><strong>Referencias de mercado</strong><span>Indicamos cuándo se consultaron los precios orientativos utilizados.</span></article>
         <article><strong>Opiniones verificadas</strong><span>Las reseñas reales se publicarán solo tras trabajos vinculados a la plataforma.</span></article>
       </section>
       <section id="casos" class="guide-section">
