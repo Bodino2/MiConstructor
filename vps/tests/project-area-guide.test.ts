@@ -170,6 +170,7 @@ test("Guía MiConstructor publica casos orientativos con fuentes y sin reseñas 
   assert.match(index, /guide-ui\.js/);
   assert.match(index, /guide-nav\.js/);
   assert.match(bootstrap, /dedicatedGuideRoute/);
-  assert.match(appSource, /"\/guia"/);
-  assert.match(appSource, /"\/guia\/:slug"/);
+  assert.match(appSource, /import \{ contentRouter \} from "\.\/routes\/content\.js"/);
+  assert.match(appSource, /app\.use\(contentRouter\(database, config\)\)/);
+  assert.doesNotMatch(appSource, /"\/guia\/:slug"/);
 });
