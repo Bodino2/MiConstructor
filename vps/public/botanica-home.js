@@ -10,22 +10,61 @@ function botanicaInitials(value) {
 }
 
 function botanicaAnonymousNav() {
-  if (!botanicaNav) return;
-  if (botanicaNav.querySelector("#logout") || botanicaNav.querySelector('a[href="/panel"]')) return;
-  const ready = botanicaNav.querySelector('a[href="/#como-funciona"]')
-    && botanicaNav.querySelector('a[href="/servicios-hogar"]')
-    && botanicaNav.querySelector('a[href="/#profesionales"]')
-    && botanicaNav.querySelector('a[href="/para-profesionales"]')
-    && botanicaNav.querySelector('a[href="/login"]')
-    && botanicaNav.querySelector('a[href="/registro-cliente"]');
-  if (ready) return;
+  if (!botanicaNav || location.pathname !== "/") return;
+
+  const authenticated = Boolean(
+    botanicaNav.querySelector("#logout")
+    || botanicaNav.querySelector('a[href="/panel"]')
+    || botanicaNav.dataset.marketplaceMode === "authenticated",
+  );
+  const mode = authenticated ? "authenticated" : "anonymous";
+
+  if (botanicaNav.classList.contains("navbar-marketplace") && botanicaNav.dataset.marketplaceMode === mode) return;
+
+  if (!document.querySelector('link[href="/marketplace-navbar.css"]')) {
+    const stylesheet = document.createElement("link");
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = "/marketplace-navbar.css";
+    document.head.append(stylesheet);
+  }
+
+  botanicaNav.classList.add("navbar-marketplace");
+  botanicaNav.dataset.marketplaceMode = mode;
   botanicaNav.innerHTML = `
-    <a href="/#como-funciona">Cómo funciona</a>
-    <a href="/servicios-hogar">Limpieza y jardín</a>
-    <a href="/#profesionales">Profesionales</a>
-    <a href="/para-profesionales">Para profesionales</a>
-    <a href="/login">Entrar</a>
-    <a class="primary" href="/registro-cliente">Crear cuenta</a>`;
+    <ul class="nav-main-links">
+      <li><a href="/#servicios">Servicios <span aria-hidden="true">▾</span></a></li>
+      <li><a href="/#como-funciona">Cómo funciona</a></li>
+      <li><a href="/guia">Guía de precios</a></li>
+      <li><a href="/opiniones">Opiniones</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a href="/para-profesionales" class="link-pro">¿Eres profesional?</a>
+      <a href="/registro-cliente" class="btn-cta-green">Pedir Presupuesto</a>
+      ${authenticated ? `
+        <div class="user-avatar-dropdown">
+          <button class="avatar-btn" type="button" aria-expanded="false" aria-controls="marketplace-user-menu">👤 Mi Cuenta <span aria-hidden="true">▾</span></button>
+          <div class="user-account-menu" id="marketplace-user-menu" hidden>
+            <a href="/panel">Panel</a>
+            <a href="/servicios-hogar">Mis Solicitudes</a>
+            <button type="button" id="logout">Salir</button>
+          </div>
+        </div>` : '<a href="/login" class="nav-login">Entrar</a>'}
+    </div>`;
+
+  if (!authenticated) return;
+
+  const avatarButton = botanicaNav.querySelector(".avatar-btn");
+  const accountMenu = botanicaNav.querySelector(".user-account-menu");
+  avatarButton?.addEventListener("click", () => {
+    const opening = accountMenu?.hidden ?? false;
+    if (accountMenu) accountMenu.hidden = !opening;
+    avatarButton.setAttribute("aria-expanded", String(opening));
+  });
+
+  botanicaNav.querySelector("#logout")?.addEventListener("click", async () => {
+    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => null);
+    window.location.assign("/");
+  });
 }
 
 function botanicaHomeMarkup() {
