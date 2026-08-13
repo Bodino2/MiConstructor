@@ -6,6 +6,7 @@ import test from "node:test";
 
 const cssUrl = new URL("../public/botanica-industrial.css", import.meta.url);
 const homeUrl = new URL("../public/botanica-home.js", import.meta.url);
+const guideNavUrl = new URL("../public/guide-nav.js", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
 const directoryUrl = new URL("../src/routes/public-directory.ts", import.meta.url);
 
@@ -78,4 +79,18 @@ test("el diseño cubre laptop, tablet y móvil sin convertir toda la página en 
   assert.match(css, /\.topbar[\s\S]*background:\s*rgba\(26, 29, 32/);
   assert.match(css, /\.site-footer[\s\S]*background:\s*var\(--mc-obsidian\)/);
   assert.match(css, /\.botanica-audience-card[\s\S]*background:\s*var\(--mc-surface\)/);
+});
+
+
+test("la navegación completa permanece tras refrescar una sesión autenticada", async () => {
+  execFileSync(process.execPath, ["--check", fileURLToPath(guideNavUrl)], { stdio: "pipe" });
+  const nav = await readFile(guideNavUrl, "utf8");
+
+  assert.match(nav, /window\.location\.pathname === "\/"/);
+  assert.match(nav, /\/#como-funciona/);
+  assert.match(nav, /\/servicios-hogar/);
+  assert.match(nav, /\/#profesionales/);
+  assert.match(nav, /\/para-profesionales/);
+  assert.match(nav, /\/guia/);
+  assert.match(nav, /\/opiniones/);
 });
