@@ -3,6 +3,12 @@
 
   const app = document.querySelector("#app");
   const nav = document.querySelector("#main-nav");
+  if (!document.querySelector('link[href="/guide-harmony.css"]')) {
+    const stylesheet = document.createElement("link");
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = "/guide-harmony.css";
+    document.head.append(stylesheet);
+  }
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'\"]/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '\"': "&quot;",
   })[character]);
@@ -64,7 +70,7 @@
 
   function renderNav() {
     if (!nav) return;
-    nav.innerHTML = `<a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a>`;
+    nav.innerHTML = `<li class="nav-item-dropdown"><button class="dropdown-toggle" type="button">Servicios ▾</button><ul class="dropdown-menu"><li><a href="/#servicios">🔨 Reformas Integrales</a></li><li><a href="/servicios-hogar#limpieza">🧹 Limpieza</a></li><li><a href="/servicios-hogar#jardin">🌳 Jardinería</a></li></ul></li><a href="/">Inicio</a><a href="/guia">Guía y precios</a><a href="/para-profesionales">Para profesionales</a><a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a>`;
   }
 
   function sourceNote(item) {
