@@ -197,7 +197,7 @@ prelive_release() {
   curl -fsS --max-time 5 "http://127.0.0.1:$PRELIVE_PORT/opiniones" >/dev/null
   curl -fsS --max-time 5 "http://127.0.0.1:$PRELIVE_PORT/qr/espana-clientes-v1.svg" >/dev/null
   curl -fsS --max-time 5 "http://127.0.0.1:$PRELIVE_PORT/qr/espana-profesionales-v1.svg" >/dev/null
-  curl -fsS --max-time 5 "http://127.0.0.1:$PRELIVE_PORT/guide-nav.js" | grep -Fq '/#como-funciona'
+  curl -fsS --max-time 5 "http://127.0.0.1:$PRELIVE_PORT/site-shell.js" | grep -Fq '/#como-funciona'
 
   systemctl stop "$PRELIVE_UNIT.service" >/dev/null 2>&1 || true
   PRELIVE_STARTED=false
@@ -242,7 +242,7 @@ public_smoke() {
   curl -fsS --max-time 8 https://miconstructor.es/opiniones >/dev/null || return 1
   curl -fsS --max-time 8 https://miconstructor.es/qr/espana-clientes-v1.svg >/dev/null || return 1
   curl -fsS --max-time 8 https://miconstructor.es/qr/espana-profesionales-v1.svg >/dev/null || return 1
-  { curl -fsS --max-time 8 https://miconstructor.es/guide-nav.js | grep -Fq '/#como-funciona'; } || return 1
+  { curl -fsS --max-time 8 https://miconstructor.es/site-shell.js | grep -Fq '/#como-funciona'; } || return 1
   echo "PUBLIC_SMOKE_OK"
 }
 
