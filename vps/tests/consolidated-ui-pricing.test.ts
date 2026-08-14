@@ -10,6 +10,37 @@ import {
 } from "../../lib/home-service-pricing.js";
 import { estimateProjectPrice } from "../../lib/project-estimator.js";
 
+interface CatalogPricing {
+  standardRange?: { median?: number };
+}
+
+interface CatalogService {
+  slug?: string;
+  pricing?: CatalogPricing & Record<string, unknown>;
+}
+
+interface CatalogVertical {
+  services?: CatalogService[];
+}
+
+interface HomeEstimate {
+  valid: boolean;
+  zone?: string;
+  range?: { minimum: number; median: number; maximum: number };
+}
+
+interface MonetizationResult {
+  valid: boolean;
+  basisCents?: number;
+  feeCents: number;
+}
+
+interface ProjectEstimate {
+  valid: boolean;
+  input?: { locationZone?: string };
+  range?: { minimum: number; maximum: number };
+}
+
 const publicUiUrl = new URL("../public/consolidated-ui.js", import.meta.url);
 const publicCssUrl = new URL("../public/consolidated-ui.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
@@ -19,9 +50,10 @@ test("el catálogo incorpora B&B y conserva una matriz pública sin monetizació
   assert.ok(bnb);
   assert.equal(bnb.bnb, true);
   assert.equal(bnb.seasonal, true);
-  const catalog = getHomeServiceCatalog();
-  const service = catalog.flatMap((vertical: any) => vertical.services).find((item: any) => item.slug === "limpieza_alojamiento_turistico");
-  assert.ok(service?.pricing?.standardRange?.median > 0);
+  const catalog = getHomeServiceCatalog() as CatalogVertical[];
+  const service = catalog.flatMap((vertical) => vertical.services ?? [])
+    .find((item) => item.slug === "limpieza_alojamiento_turistico");
+  assert.ok(service?.pricing?.standardRange?.median && service.pricing.standardRange.median > 0);
   assert.equal("feeCents" in service.pricing, false);
   assert.equal("percentage" in service.pricing, false);
 });
@@ -32,9 +64,10 @@ test("la estimación de servicios usa cantidad, zona y devuelve un rango coheren
     location: "Linares, Jaén",
     squareMeters: 90,
     qualityLevel: "estandar",
-  }) as any;
+  }) as HomeEstimate;
   assert.equal(estimate.valid, true);
   assert.equal(estimate.zone, "ANDALUCIA");
+  assert.ok(estimate.range);
   assert.ok(estimate.range.minimum > 0);
   assert.ok(estimate.range.minimum < estimate.range.median);
   assert.ok(estimate.range.median < estimate.range.maximum);
@@ -48,20 +81,23 @@ test("la recurrencia anualiza 60 euros semanales a 3.120 euros", () => {
 });
 
 test("el simulador privado monetiza sobre el valor recurrente y no sobre una sola visita", () => {
-  const result = calculateHomeServiceMonetization({ priceCentsPerVisit: 6_000, frequency: "SEMANAL" }) as any;
+  const result = calculateHomeServiceMonetization({ priceCentsPerVisit: 6_000, frequency: "SEMANAL" }) as MonetizationResult;
   assert.equal(result.valid, true);
   assert.equal(result.basisCents, 312_000);
   assert.ok(result.feeCents > 6_000 * 0.01);
+  assert.ok(result.basisCents);
   assert.ok(result.feeCents < result.basisCents);
 });
 
 test("el estimator de reformas aplica localidad sin exigir un índice manual", () => {
-  const jaen = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Jaén" }) as any;
-  const madrid = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Madrid" }) as any;
+  const jaen = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Jaén" }) as ProjectEstimate;
+  const madrid = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Madrid" }) as ProjectEstimate;
   assert.equal(jaen.valid, true);
   assert.equal(madrid.valid, true);
-  assert.equal(jaen.input.locationZone, "ANDALUCIA");
-  assert.equal(madrid.input.locationZone, "MADRID");
+  assert.equal(jaen.input?.locationZone, "ANDALUCIA");
+  assert.equal(madrid.input?.locationZone, "MADRID");
+  assert.ok(jaen.range);
+  assert.ok(madrid.range);
   assert.ok(madrid.range.minimum > jaen.range.minimum);
 });
 
