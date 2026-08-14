@@ -10,13 +10,9 @@ import {
 } from "../../lib/home-service-pricing.js";
 import { estimateProjectPrice } from "../../lib/project-estimator.js";
 
-interface CatalogPricing {
-  standardRange?: { median?: number };
-}
-
 interface CatalogService {
   slug?: string;
-  pricing?: CatalogPricing & Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface CatalogVertical {
@@ -44,8 +40,9 @@ interface ProjectEstimate {
 const publicUiUrl = new URL("../public/consolidated-ui.js", import.meta.url);
 const publicCssUrl = new URL("../public/consolidated-ui.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
+const marketplaceUrl = new URL("../src/routes/marketplace.ts", import.meta.url);
 
-test("el catálogo incorpora B&B y conserva una matriz pública sin monetización", () => {
+test("el catálogo incorpora B&B sin exponer la matriz interna de precios", () => {
   const bnb = getHomeService("limpieza_alojamiento_turistico");
   assert.ok(bnb);
   assert.equal(bnb.bnb, true);
@@ -53,9 +50,10 @@ test("el catálogo incorpora B&B y conserva una matriz pública sin monetizació
   const catalog = getHomeServiceCatalog() as CatalogVertical[];
   const service = catalog.flatMap((vertical) => vertical.services ?? [])
     .find((item) => item.slug === "limpieza_alojamiento_turistico");
-  assert.ok(service?.pricing?.standardRange?.median && service.pricing.standardRange.median > 0);
-  assert.equal("feeCents" in service.pricing, false);
-  assert.equal("percentage" in service.pricing, false);
+  assert.ok(service);
+  assert.equal("pricing" in service, false);
+  assert.equal("feeCents" in service, false);
+  assert.equal("percentage" in service, false);
 });
 
 test("la estimación de servicios usa cantidad, zona y devuelve un rango coherente", () => {
@@ -101,6 +99,13 @@ test("el estimator de reformas aplica localidad sin exigir un índice manual", (
   assert.ok(madrid.range.minimum > jaen.range.minimum);
 });
 
+test("el endpoint de estimación existente enruta también servicios sin crear una API pública nueva", async () => {
+  const source = await readFile(marketplaceUrl, "utf8");
+  assert.match(source, /router\.post\("\/estimate"/);
+  assert.match(source, /estimateHomeServicePrice\(body\)/);
+  assert.match(source, /estimateProjectPrice\(body\)/);
+});
+
 test("el módulo consolidado es JavaScript válido y elimina el presupuesto editable en runtime", async () => {
   execFileSync(process.execPath, ["--check", publicUiUrl.pathname], { stdio: "pipe" });
   const source = await readFile(publicUiUrl, "utf8");
@@ -110,6 +115,7 @@ test("el módulo consolidado es JavaScript válido y elimina el presupuesto edit
   assert.match(source, /Crear cuenta profesional/);
   assert.match(source, /MC_SEASON_VALUE/);
   assert.match(source, /Modalidad B&B/);
+  assert.match(source, /fetch\("\/api\/v1\/estimate"/);
   assert.doesNotMatch(source, /rate:\s*0\.0[345]/);
 });
 
