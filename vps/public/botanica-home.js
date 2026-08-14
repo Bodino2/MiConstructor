@@ -39,7 +39,7 @@ function botanicaAnonymousNav() {
     </ul>
     <div class="nav-actions">
       <a href="/para-profesionales" class="link-pro">¿Eres profesional?</a>
-      <a href="/registro-cliente" class="btn-cta-green">Pedir Presupuesto</a>
+      <a href="/publicar?servicio=reformas" class="btn-cta-green">Pedir Presupuesto</a>
       ${authenticated ? `
         <div class="user-avatar-dropdown">
           <button class="avatar-btn" type="button" aria-expanded="false" aria-controls="marketplace-user-menu">👤 Mi Cuenta <span aria-hidden="true">▾</span></button>
@@ -75,7 +75,7 @@ function botanicaHomeMarkup() {
         <h1 id="botanica-title">Reformas con claridad y <em>profesionales verificados.</em></h1>
         <p class="lead">Compara presupuestos, programa servicios y conserva contratos, visitas, hitos, evidencias y decisiones en un único espacio seguro.</p>
         <div class="botanica-hero-actions">
-          <a class="button primary" href="/registro-cliente">Pedir presupuesto →</a>
+          <a class="button primary" href="/publicar?servicio=reformas">Pedir presupuesto →</a>
           <a class="button" href="/servicios-hogar">Limpieza y jardín →</a>
         </div>
         <div class="botanica-proof-row" aria-label="Ventajas de MiConstructor">
@@ -117,7 +117,7 @@ function botanicaHomeMarkup() {
     <section class="botanica-section" id="servicios" aria-labelledby="servicios-title">
       <div class="botanica-section-head"><div><span class="eyebrow">UNA PLATAFORMA PARA TU PROPIEDAD</span><h2 id="servicios-title">¿Qué necesitas?</h2><p>MiConstructor mantiene flujos distintos según el trabajo: una reforma no se gestiona igual que una limpieza semanal.</p></div></div>
       <div class="botanica-steps">
-        <article class="botanica-step"><strong class="botanica-step-number">01</strong><div><h3>Reformas y construcción</h3><p>Presupuestos, contratos, hitos, evidencias, extras controlados y pasaporte digital de la obra.</p><a class="botanica-section-link" href="/registro-cliente">Publicar proyecto →</a></div></article>
+        <article class="botanica-step"><strong class="botanica-step-number">01</strong><div><h3>Reformas y construcción</h3><p>Presupuestos, contratos, hitos, evidencias, extras controlados y pasaporte digital de la obra.</p><a class="botanica-section-link" href="/publicar?servicio=reformas">Publicar proyecto →</a></div></article>
         <article class="botanica-step"><strong class="botanica-step-number">02</strong><div><h3>Limpieza y mantenimiento</h3><p>Hogar, profunda, fin de obra, cristales y comunidades. Puntual o con frecuencia programada.</p><a class="botanica-section-link" href="/servicios-hogar#limpieza">Ver servicios →</a></div></article>
         <article class="botanica-step"><strong class="botanica-step-number">03</strong><div><h3>Jardín y exterior</h3><p>Jardinería, poda, césped, riego, parcelas y piscina con agenda y visitas recurrentes.</p><a class="botanica-section-link" href="/servicios-hogar#jardin">Ver servicios →</a></div></article>
       </div>
