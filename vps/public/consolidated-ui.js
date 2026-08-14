@@ -18,40 +18,12 @@ const MC_HOME_CATALOG_ROUTES = new Map([
   ["Mantenimiento de piscina", ["jardineria", "mantenimiento_piscina"]],
 ]);
 const MC_FREQUENCY_VISITS = { PUNTUAL: 1, SEMANAL: 52, CADA_2_SEMANAS: 26, MENSUAL: 12 };
-const MC_ZONE_RULES = [
-  ["ANDALUCIA", ["andalucia", "almeria", "cadiz", "cordoba", "granada", "huelva", "jaen", "malaga", "sevilla"]],
-  ["MADRID", ["madrid"]],
-  ["CATALUNA", ["cataluna", "barcelona", "girona", "lerida", "lleida", "tarragona"]],
-  ["BALEARES", ["baleares", "balears", "mallorca", "menorca", "ibiza", "eivissa"]],
-  ["PAIS_VASCO", ["pais vasco", "euskadi", "alava", "araba", "bizkaia", "vizcaya", "gipuzkoa", "guipuzcoa"]],
-  ["NAVARRA", ["navarra", "pamplona", "iruna"]],
-  ["COMUNIDAD_VALENCIANA", ["valencia", "alicante", "castellon"]],
-  ["CANARIAS", ["canarias", "tenerife", "gran canaria", "lanzarote", "fuerteventura", "la palma"]],
-  ["EXTREMADURA", ["extremadura", "badajoz", "caceres"]],
-  ["CASTILLA_LA_MANCHA", ["castilla la mancha", "albacete", "ciudad real", "cuenca", "guadalajara", "toledo"]],
-  ["CASTILLA_Y_LEON", ["castilla y leon", "avila", "burgos", "leon", "palencia", "salamanca", "segovia", "soria", "valladolid", "zamora"]],
-  ["GALICIA", ["galicia", "a coruna", "coruna", "lugo", "ourense", "orense", "pontevedra"]],
-  ["ASTURIAS", ["asturias", "oviedo", "gijon"]],
-  ["CANTABRIA", ["cantabria", "santander"]],
-  ["ARAGON", ["aragon", "huesca", "teruel", "zaragoza"]],
-  ["MURCIA", ["murcia", "cartagena"]],
-  ["LA_RIOJA", ["la rioja", "logrono"]],
-];
 
 let mcCatalogPromise = null;
 let mcShellRefreshing = false;
 
-function mcNormalize(value) {
-  return String(value ?? "").trim().toLowerCase().normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
-}
-
 function mcMoneyFromCents(cents) {
   return MC_CURRENCY.format(Number(cents || 0) / 100);
-}
-
-function mcRoundFiveEuros(cents) {
-  return Math.max(0, Math.round(Number(cents || 0) / 500) * 500);
 }
 
 function mcCurrentProfessionalContext() {
@@ -268,7 +240,7 @@ async function mcHomeCatalog() {
     mcCatalogPromise = fetch("/api/v1/home-services/catalog", { credentials: "same-origin" })
       .then(async (response) => {
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload?.error || "No se ha podido cargar la matriz de servicios.");
+        if (!response.ok) throw new Error(payload?.error || "No se ha podido cargar el catálogo de servicios.");
         return payload;
       })
       .catch((error) => {
@@ -287,38 +259,27 @@ function mcCatalogService(catalog, slug) {
   return null;
 }
 
-function mcZoneCoefficient(locationValue, pricing) {
-  const normalized = mcNormalize(locationValue);
-  const match = MC_ZONE_RULES.find(([, tokens]) => tokens.some((token) => normalized.includes(mcNormalize(token))));
-  const zone = match?.[0] || "NACIONAL";
-  return { zone, coefficient: Number(pricing?.zoneMultipliers?.[zone] || pricing?.zoneMultipliers?.NACIONAL || 1) };
-}
-
-function mcEstimateHomeServiceRange(form, service) {
-  const pricing = service?.pricing;
-  if (!pricing) return null;
-  const squareMeters = Number(form.elements.squareMeters?.value || 0);
-  const estimatedHours = Number(form.elements.estimatedHours?.value || 0);
-  const bedrooms = Math.max(0, Number(form.elements.bedrooms?.value || 0));
-  const bathrooms = Math.max(0, Number(form.elements.bathrooms?.value || 0));
-  let quantity = Number(pricing.referenceQuantity || 1);
-  if (pricing.unit === "HORA") {
-    if (estimatedHours > 0) quantity = estimatedHours;
-    else if (squareMeters > 0) quantity = Math.max(2, squareMeters / 28);
-  } else if (pricing.unit === "M2" && squareMeters > 0) quantity = squareMeters;
-  const zone = mcZoneCoefficient(form.elements.location?.value, pricing);
-  const quality = Number(pricing.qualityMultipliers?.estandar || 1);
-  const coefficient = zone.coefficient * quality;
-  const range = {};
-  for (const key of ["minimum", "median", "maximum"]) {
-    let raw = Number(pricing.standardRange?.[key] || 0) * quantity;
-    if (service.slug === "limpieza_alojamiento_turistico") {
-      raw *= 1 + Math.max(0, bedrooms - 1) * 0.12 + Math.max(0, bathrooms - 1) * 0.08;
-    }
-    raw = Math.max(raw, Number(pricing.minimumVisit?.[key] || 0));
-    range[key] = mcRoundFiveEuros(raw * coefficient);
-  }
-  return { range, quantity, zone: zone.zone };
+async function mcEstimateHomeServiceRange(form, service) {
+  if (!service?.slug) return null;
+  const locationValue = String(form.elements.location?.value || "").trim();
+  if (!locationValue) return null;
+  const response = await fetch("/api/v1/estimate", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      serviceSlug: service.slug,
+      location: locationValue,
+      squareMeters: Number(form.elements.squareMeters?.value || 0) || undefined,
+      estimatedHours: Number(form.elements.estimatedHours?.value || 0) || undefined,
+      bedrooms: Number(form.elements.bedrooms?.value || 0) || undefined,
+      bathrooms: Number(form.elements.bathrooms?.value || 0) || undefined,
+      qualityLevel: "estandar",
+    }),
+  });
+  const estimate = await response.json();
+  if (!response.ok) throw new Error(estimate?.error || "No se ha podido calcular la estimación.");
+  return estimate;
 }
 
 function mcSeasonVisitCount(frequency, startValue, endValue) {
@@ -385,6 +346,13 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
   let bnbBlock = null;
   let visualSeason = false;
 
+  const setSeasonVisible = (visible) => {
+    seasonBlock.hidden = !visible;
+    seasonEnd.required = visible;
+    const startDate = form.elements.requestedStartDate?.value || "";
+    seasonEnd.min = startDate;
+  };
+
   const restoreDraftMetadata = () => {
     const notes = form.elements.notes?.value || "";
     const storedEnd = mcParseMetadata(notes, "Fin temporada");
@@ -398,7 +366,7 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
     const existingSeasonOption = frequencySelect.querySelector(`option[value="${MC_SEASON_VALUE}"]`);
     if (existingSeasonOption) existingSeasonOption.remove();
     visualSeason = false;
-    seasonBlock.hidden = true;
+    setSeasonVisible(false);
 
     if (service?.seasonal && !service?.bnb) {
       const option = document.createElement("option");
@@ -414,21 +382,28 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
       bnbBlock = mcBnbBlock(form);
       bnbBlock.hidden = false;
       const mode = bnbBlock.querySelector("[data-mc-bnb-mode]");
+      const checkout = bnbBlock.querySelector("[data-mc-checkout]");
+      const checkinStart = bnbBlock.querySelector("[data-mc-checkin-start]");
+      const checkinEnd = bnbBlock.querySelector("[data-mc-checkin-end]");
       const storedMode = mcParseMetadata(form.elements.notes?.value, "Modalidad B&B");
       if (storedMode && mode.querySelector(`option[value="${CSS.escape(storedMode)}"]`)) mode.value = storedMode;
       const updateBnbMode = () => {
         const value = mode.value;
         const frequencyLabel = frequencySelect.closest("label");
-        if (value === "PUNTUAL" || value === "ENTRE_RESERVAS") {
+        const betweenBookings = value === "ENTRE_RESERVAS";
+        checkout.required = betweenBookings;
+        checkinStart.required = betweenBookings;
+        checkinEnd.required = betweenBookings;
+        if (value === "PUNTUAL" || betweenBookings) {
           frequencySelect.value = "PUNTUAL";
           if (frequencyLabel) frequencyLabel.hidden = true;
-          seasonBlock.hidden = true;
+          setSeasonVisible(false);
         } else {
           if (frequencyLabel) frequencyLabel.hidden = false;
           if (frequencySelect.value === "PUNTUAL" || frequencySelect.value === MC_SEASON_VALUE) {
             frequencySelect.value = frequencySelect.querySelector('option[value="SEMANAL"]') ? "SEMANAL" : frequencySelect.querySelector('option[value="MENSUAL"]') ? "MENSUAL" : frequencySelect.options[0]?.value;
           }
-          seasonBlock.hidden = value !== "TEMPORADA";
+          setSeasonVisible(value === "TEMPORADA");
           visualSeason = value === "TEMPORADA";
         }
       };
@@ -441,6 +416,7 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
       if (bedroomsLabel) bedroomsLabel.childNodes[0].textContent = "Habitaciones";
     } else if (bnbBlock) {
       bnbBlock.hidden = true;
+      bnbBlock.querySelectorAll("input").forEach((input) => { input.required = false; });
       const frequencyLabel = frequencySelect.closest("label");
       if (frequencyLabel) frequencyLabel.hidden = false;
     }
@@ -450,12 +426,16 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
   frequencySelect.addEventListener("change", () => {
     if (frequencySelect.value === MC_SEASON_VALUE) {
       visualSeason = true;
-      seasonBlock.hidden = false;
+      setSeasonVisible(true);
     } else if (!bnbBlock || bnbBlock.hidden || bnbBlock.querySelector("[data-mc-bnb-mode]")?.value !== "TEMPORADA") {
       visualSeason = false;
-      seasonBlock.hidden = true;
+      setSeasonVisible(false);
     }
     form.dispatchEvent(new Event("mc:estimate"));
+  });
+
+  form.elements.requestedStartDate?.addEventListener("change", () => {
+    seasonEnd.min = form.elements.requestedStartDate?.value || "";
   });
 
   serviceSelect.addEventListener("change", () => window.setTimeout(() => {
@@ -468,7 +448,7 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
     const notes = form.elements.notes;
     if (!notes) return;
     const originalVisualFrequency = frequencySelect.value;
-    let baseNotes = mcStripSystemMetadata(notes.value);
+    const baseNotes = mcStripSystemMetadata(notes.value);
     const blocks = [];
     const isBnb = service?.slug === "limpieza_alojamiento_turistico" || service?.bnb === true;
     if (isBnb && bnbBlock) {
@@ -516,39 +496,52 @@ function mcSetupHomeServiceEstimate(form, catalog) {
   mcSelectedHomeServiceFromQuery(serviceSelect);
   mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect);
   const card = mcEstimateCard(form);
+  let sequence = 0;
 
-  const calculate = () => {
+  const calculate = async () => {
     const service = mcCatalogService(catalog, serviceSelect.value);
-    const estimate = mcEstimateHomeServiceRange(form, service);
     const locationValue = String(form.elements.location?.value || "").trim();
-    if (!service || !estimate || !locationValue) {
+    if (!service || !locationValue) {
       card.dataset.state = "pending";
       card.innerHTML = "<span>Estimación MiConstructor</span><strong>Selecciona servicio y localidad para calcular el rango.</strong>";
       return;
     }
-    const minimum = estimate.range.minimum;
-    const maximum = estimate.range.maximum;
-    let frequency = frequencySelect.value;
-    let visits = MC_FREQUENCY_VISITS[frequency] || 1;
-    let recurringLabel = "";
-    const seasonBlock = form.querySelector("[data-mc-season-block]");
-    const bnbMode = form.querySelector("[data-mc-bnb-mode]")?.value;
-    const seasonal = frequency === MC_SEASON_VALUE || bnbMode === "TEMPORADA";
-    if (seasonal) {
-      frequency = seasonBlock?.querySelector("[data-mc-season-cadence]")?.value || "MENSUAL";
-      visits = mcSeasonVisitCount(frequency, form.elements.requestedStartDate?.value, seasonBlock?.querySelector("[data-mc-season-end]")?.value);
-      if (visits > 0) recurringLabel = `Referencia para la temporada: ${mcMoneyFromCents(minimum * visits)} – ${mcMoneyFromCents(maximum * visits)}.`;
-    } else if (frequency !== "PUNTUAL" && MC_FREQUENCY_VISITS[frequency]) {
-      recurringLabel = `Referencia anual aproximada: ${mcMoneyFromCents(minimum * visits)} – ${mcMoneyFromCents(maximum * visits)}.`;
+    const current = ++sequence;
+    card.dataset.state = "loading";
+    card.innerHTML = "<span>Estimación MiConstructor</span><strong>Calculando rango orientativo…</strong>";
+    try {
+      const estimate = await mcEstimateHomeServiceRange(form, service);
+      if (current !== sequence || !estimate?.range) return;
+      const minimum = Number(estimate.range.minimum || 0);
+      const maximum = Number(estimate.range.maximum || 0);
+      if (!minimum || !maximum) throw new Error("La estimación no contiene un rango válido.");
+      let frequency = frequencySelect.value;
+      let visits = MC_FREQUENCY_VISITS[frequency] || 1;
+      let recurringLabel = "";
+      const seasonBlock = form.querySelector("[data-mc-season-block]");
+      const bnbMode = form.querySelector("[data-mc-bnb-mode]")?.value;
+      const seasonal = frequency === MC_SEASON_VALUE || bnbMode === "TEMPORADA";
+      if (seasonal) {
+        frequency = seasonBlock?.querySelector("[data-mc-season-cadence]")?.value || "MENSUAL";
+        visits = mcSeasonVisitCount(frequency, form.elements.requestedStartDate?.value, seasonBlock?.querySelector("[data-mc-season-end]")?.value);
+        if (visits > 0) recurringLabel = `Referencia para la temporada: ${mcMoneyFromCents(minimum * visits)} – ${mcMoneyFromCents(maximum * visits)}.`;
+      } else if (frequency !== "PUNTUAL" && MC_FREQUENCY_VISITS[frequency]) {
+        recurringLabel = `Referencia anual aproximada: ${mcMoneyFromCents(minimum * visits)} – ${mcMoneyFromCents(maximum * visits)}.`;
+      }
+      const zone = estimate.zoneLabel ? ` · ${estimate.zoneLabel}` : "";
+      card.dataset.state = "ready";
+      card.innerHTML = `<span>Estimación MiConstructor${zone} · por visita</span><strong>${mcMoneyFromCents(minimum)} – ${mcMoneyFromCents(maximum)}</strong><small>${recurringLabel ? `${recurringLabel} ` : ""}Rango orientativo; la oferta final la fija el profesional.</small>`;
+    } catch (error) {
+      if (current !== sequence) return;
+      card.dataset.state = "error";
+      card.innerHTML = `<span>Estimación MiConstructor</span><strong>${String(error?.message || "No se ha podido calcular.")}</strong>`;
     }
-    card.dataset.state = "ready";
-    card.innerHTML = `<span>Estimación MiConstructor · por visita</span><strong>${mcMoneyFromCents(minimum)} – ${mcMoneyFromCents(maximum)}</strong><small>${recurringLabel ? `${recurringLabel} ` : ""}Rango orientativo; la oferta final la fija el profesional.</small>`;
   };
 
   let timer = 0;
   const schedule = () => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(calculate, 120);
+    timer = window.setTimeout(() => void calculate(), 120);
   };
   ["location", "squareMeters", "estimatedHours", "bedrooms", "bathrooms", "requestedStartDate"].forEach((name) => {
     form.elements[name]?.addEventListener("input", schedule);
@@ -579,7 +572,7 @@ async function mcEnhanceForms(root = document) {
       homeForms.forEach((form) => {
         const card = mcEstimateCard(form);
         card.dataset.state = "error";
-        card.innerHTML = "<span>Estimación MiConstructor</span><strong>No se ha podido cargar la matriz de precios.</strong>";
+        card.innerHTML = "<span>Estimación MiConstructor</span><strong>No se ha podido cargar el catálogo de servicios.</strong>";
       });
     }
   }
