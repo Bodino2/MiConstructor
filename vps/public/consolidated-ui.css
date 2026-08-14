@@ -1,0 +1,172 @@
+/* Consolidated public-shell and client-funnel overrides. Loaded last on purpose. */
+.topbar #main-nav.site-nav .site-nav-dropdown:not([open]) > .site-nav-menu,
+.topbar #main-nav.site-nav .site-account-dropdown:not([open]) > .site-account-menu {
+  display: none;
+}
+
+.topbar #main-nav.site-nav .site-nav-dropdown[open] > .site-nav-menu,
+.topbar #main-nav.site-nav .site-account-dropdown[open] > .site-account-menu {
+  display: grid;
+}
+
+.topbar #main-nav.site-nav .site-nav-menu,
+.topbar #main-nav.site-nav .site-account-menu,
+.topbar #main-nav .dropdown-menu {
+  background: #fff;
+  color: var(--mc-text);
+}
+
+.topbar #main-nav.site-nav .site-nav-menu a,
+.topbar #main-nav.site-nav .site-account-menu a,
+.topbar #main-nav.site-nav .site-account-menu button,
+.topbar #main-nav .dropdown-menu a {
+  color: var(--mc-text);
+  background: transparent;
+}
+
+.topbar #main-nav.site-nav .site-nav-menu a:hover,
+.topbar #main-nav.site-nav .site-nav-menu a:focus-visible,
+.topbar #main-nav.site-nav .site-account-menu a:hover,
+.topbar #main-nav.site-nav .site-account-menu button:hover,
+.topbar #main-nav .dropdown-menu a:hover,
+.topbar #main-nav .dropdown-menu a:focus-visible {
+  color: var(--mc-action);
+  background: #F2F8F5;
+}
+
+.hs-service-chips a.mc-service-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--mc-border);
+  border-radius: 999px;
+  background: var(--mc-surface);
+  color: var(--mc-text);
+  text-decoration: none;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.hs-service-chips a.mc-service-chip:hover,
+.hs-service-chips a.mc-service-chip:focus-visible {
+  border-color: var(--mc-action);
+  background: var(--mc-success-soft);
+  color: var(--mc-action);
+}
+
+.mc-estimate-card {
+  grid-column: 1 / -1;
+  border: 1px solid var(--mc-border);
+  border-left: 4px solid var(--mc-action);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--mc-success-soft);
+  color: var(--mc-text);
+}
+
+.mc-estimate-card strong,
+.mc-estimate-card span,
+.mc-estimate-card small {
+  display: block;
+}
+
+.mc-estimate-card strong {
+  margin: 3px 0 4px;
+  color: var(--mc-text-strong);
+  font-size: 18px;
+}
+
+.mc-estimate-card span,
+.mc-estimate-card small {
+  color: var(--mc-muted);
+  line-height: 1.45;
+}
+
+.mc-estimate-card[data-state="loading"] strong,
+.mc-estimate-card[data-state="pending"] strong {
+  font-size: 15px;
+}
+
+.mc-estimate-card[data-state="error"] {
+  border-left-color: var(--mc-danger);
+  background: #FFF1EF;
+}
+
+.mc-home-service-extra {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--mc-border);
+  border-radius: 12px;
+  background: var(--mc-soft);
+}
+
+.mc-home-service-extra h3,
+.mc-home-service-extra p {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.mc-home-service-extra p {
+  color: var(--mc-muted);
+}
+
+.mc-home-service-extra .full {
+  grid-column: 1 / -1;
+}
+
+.mc-inline-checks {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mc-inline-checks label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--mc-border);
+  border-radius: 9px;
+  background: #fff;
+  font-weight: 650;
+}
+
+.mc-inline-checks input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.mc-professional-mobile .site-nav-primary {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .topbar #main-nav.site-nav .site-nav-menu,
+  .topbar #main-nav.site-nav .site-account-menu {
+    width: 100%;
+    margin-top: 5px;
+    border-color: #D7E0E4;
+    background: #fff;
+  }
+
+  .topbar #main-nav.site-nav .site-nav-menu a,
+  .topbar #main-nav.site-nav .site-account-menu a,
+  .topbar #main-nav.site-nav .site-account-menu button {
+    color: var(--mc-text);
+  }
+
+  .mc-home-service-extra,
+  .mc-inline-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-professional-mobile .site-nav-actions {
+    display: grid;
+    gap: 6px;
+  }
+}
