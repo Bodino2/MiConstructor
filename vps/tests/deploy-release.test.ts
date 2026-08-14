@@ -57,7 +57,7 @@ test("pre-live overrides production port explicitly and verifies launch surfaces
   assert.match(source, /\/opiniones/);
   assert.match(source, /qr\/espana-clientes-v1\.svg/);
   assert.match(source, /qr\/espana-profesionales-v1\.svg/);
-  assert.match(source, /guide-nav\.js/);
+  assert.match(source, /site-shell\.js/);
   assert.match(source, /PRELIVE_FULL_OK/);
 });
 
