@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const cssUrl = new URL("../public/botanica-industrial.css", import.meta.url);
-const marketplaceNavCssUrl = new URL("../public/marketplace-navbar.css", import.meta.url);
+const baseCssUrl = new URL("../public/styles.css", import.meta.url);
+const shellCssUrl = new URL("../public/site-shell.css", import.meta.url);
+const shellUrl = new URL("../public/site-shell.js", import.meta.url);
 const homeUrl = new URL("../public/botanica-home.js", import.meta.url);
 const guideNavUrl = new URL("../public/guide-nav.js", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
@@ -29,21 +31,28 @@ test("Botanica Industrial y servicios del hogar se cargan al final del shell", a
   assert.match(index, /MiConstructor \| Reformas y cuidado del hogar/);
 });
 
-test("el sistema visual usa Obsidian, hormigón y Malachite con CTA accesible", async () => {
-  const css = await readFile(cssUrl, "utf8");
-  assert.match(css, /--mc-bg:\s*#EAEAEA/i);
-  assert.match(css, /--mc-surface:\s*#FFFFFF/i);
-  assert.match(css, /--mc-obsidian:\s*#1A1D20/i);
-  assert.match(css, /--mc-accent:\s*#00A36C/i);
-  assert.match(css, /--mc-action:\s*#008758/i);
+test("el sistema visual usa el design system compartido con CTA accesible", async () => {
+  const [baseCss, css] = await Promise.all([
+    readFile(baseCssUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+  assert.match(baseCss, /--mc-bg:\s*#FFFFFF/i);
+  assert.match(baseCss, /--mc-surface:\s*#FFFFFF/i);
+  assert.match(baseCss, /--mc-header:\s*#1A1D20/i);
+  assert.match(baseCss, /--mc-obsidian:\s*#1A1D20/i);
+  assert.match(baseCss, /--mc-action:\s*#008758/i);
+  assert.match(css, /--mc-accent:\s*var\(--mc-action\)/i);
   assert.ok(contrast("#008758", "#FFFFFF") >= 4.5);
 });
 
 test("cookies permanecen compactas y la configuración avanzada respeta hidden", async () => {
-  const css = await readFile(cssUrl, "utf8");
-  assert.match(css, /\.cookie-settings\[hidden\]\s*\{\s*display:\s*none\s*!important/);
-  assert.match(css, /max-width:\s*500px\s*!important/);
-  assert.match(css, /max-height:\s*68vh/);
+  const [shellCss, shell] = await Promise.all([
+    readFile(shellCssUrl, "utf8"),
+    readFile(shellUrl, "utf8"),
+  ]);
+  assert.match(shell, /class="cookie-settings" hidden/);
+  assert.match(shell, /querySelector\("\.cookie-settings"\)\.hidden = false/);
+  assert.match(shellCss, /\.cookie-banner\{[\s\S]*width:min\(500px,\s*calc\(100vw - 36px\)\)/);
 });
 
 test("la portada separa usuarios, expone las tres verticales y no inventa métricas", async () => {
@@ -73,45 +82,56 @@ test("el directorio público solo expone profesionales realmente verificados y m
 });
 
 test("el diseño cubre laptop, tablet y móvil sin convertir toda la página en dark mode", async () => {
-  const css = await readFile(cssUrl, "utf8");
+  const [css, baseCss, shellCss] = await Promise.all([
+    readFile(cssUrl, "utf8"),
+    readFile(baseCssUrl, "utf8"),
+    readFile(shellCssUrl, "utf8"),
+  ]);
   assert.match(css, /@media \(max-width: 1120px\)/);
   assert.match(css, /@media \(max-width: 900px\)/);
   assert.match(css, /@media \(max-width: 640px\)/);
-  assert.match(css, /\.topbar[\s\S]*background:\s*rgba\(26, 29, 32/);
-  assert.match(css, /\.site-footer[\s\S]*background:\s*var\(--mc-obsidian\)/);
+  assert.match(baseCss, /\.topbar\s*\{[\s\S]*background:\s*var\(--mc-header\)/);
+  assert.match(baseCss, /body\s*\{[\s\S]*background:\s*var\(--mc-bg\)/);
+  assert.match(shellCss, /\.site-footer\{[\s\S]*background:var\(--mc-header\)/);
   assert.match(css, /\.botanica-audience-card[\s\S]*background:\s*var\(--mc-surface\)/);
 });
 
-
 test("la navegación completa permanece tras refrescar una sesión autenticada", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(guideNavUrl)], { stdio: "pipe" });
-  const nav = await readFile(guideNavUrl, "utf8");
+  const [nav, shell] = await Promise.all([
+    readFile(guideNavUrl, "utf8"),
+    readFile(shellUrl, "utf8"),
+  ]);
 
-  assert.match(nav, /window\.location\.pathname === "\/"/);
-  assert.match(nav, /\/#como-funciona/);
-  assert.match(nav, /\/servicios-hogar/);
-  assert.match(nav, /\/#profesionales/);
-  assert.match(nav, /\/para-profesionales/);
-  assert.match(nav, /\/guia/);
-  assert.match(nav, /\/opiniones/);
+  assert.match(nav, /MiConstructorShell/);
+  assert.match(nav, /miconstructor:shell-ready/);
+  assert.match(nav, /refreshHeader/);
+  assert.match(shell, /\/#como-funciona/);
+  assert.match(shell, /\/servicios-hogar/);
+  assert.match(shell, /\/para-profesionales/);
+  assert.match(shell, /\/guia/);
+  assert.match(shell, /\/opiniones/);
 });
 
 test("la portada usa la navegación marketplace solicitada y separa acceso anónimo de cuenta autenticada", async () => {
-  const home = await readFile(homeUrl, "utf8");
-  const css = await readFile(marketplaceNavCssUrl, "utf8");
+  const [home, shell, shellCss] = await Promise.all([
+    readFile(homeUrl, "utf8"),
+    readFile(shellUrl, "utf8"),
+    readFile(shellCssUrl, "utf8"),
+  ]);
 
-  assert.match(home, /navbar-marketplace/);
-  assert.match(home, />Servicios <span aria-hidden="true">▾<\/span>/);
-  assert.match(home, />Cómo funciona<\/a>/);
-  assert.match(home, />Guía de precios<\/a>/);
-  assert.match(home, />Opiniones<\/a>/);
-  assert.match(home, />¿Eres profesional\?<\/a>/);
-  assert.match(home, />Pedir Presupuesto<\/a>/);
-  assert.match(home, />👤 Mi Cuenta <span aria-hidden="true">▾<\/span>/);
-  assert.match(home, />Mis Solicitudes<\/a>/);
-  assert.match(home, /id="logout">Salir<\/button>/);
-  assert.match(home, /class="nav-login">Entrar<\/a>/);
-  assert.match(css, /\.topbar nav\.navbar-marketplace[\s\S]*flex-wrap:\s*nowrap/);
-  assert.match(css, /\.btn-cta-green/);
-  assert.match(css, /\.user-account-menu\[hidden\]/);
+  assert.doesNotMatch(home, /navbar-marketplace/);
+  assert.match(shell, /<details class="site-nav-dropdown"><summary>Servicios<\/summary>/);
+  assert.match(shell, />Cómo funciona<\/a>/);
+  assert.match(shell, /"Guía de precios"/);
+  assert.match(shell, /"Opiniones"/);
+  assert.match(shell, /"¿Eres profesional\?"/);
+  assert.match(shell, />Pedir presupuesto<\/a>/);
+  assert.match(shell, /<summary>Mi Cuenta<\/summary>/);
+  assert.match(shell, />Mis solicitudes<\/a>/);
+  assert.match(shell, /data-site-logout>Salir<\/button>/);
+  assert.match(shell, /"Entrar"/);
+  assert.match(shellCss, /#main-nav\.site-nav\{[\s\S]*display:flex/);
+  assert.match(shellCss, /\.site-nav-cta\{[\s\S]*background:var\(--mc-action\)/);
+  assert.match(shellCss, /\.site-account-menu\{/);
 });

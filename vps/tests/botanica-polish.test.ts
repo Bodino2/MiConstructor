@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const cssUrl = new URL("../public/botanica-polish.css", import.meta.url);
+const shellCssUrl = new URL("../public/site-shell.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
 
 test("los retoques finales cargan después del tema y de los ajustes de laptop", async () => {
@@ -21,10 +22,10 @@ test("la tarjeta verificada conserva aire inferior y una cuadrícula estable", a
 });
 
 test("el botón de soporte comparte color, radio y altura con los CTA", async () => {
-  const css = await readFile(cssUrl, "utf8");
+  const css = await readFile(shellCssUrl, "utf8");
   assert.match(css, /\.support-launcher\s*\{[\s\S]*min-height:\s*44px/);
-  assert.match(css, /border-radius:\s*8px\s*!important/);
-  assert.match(css, /background:\s*#087a55\s*!important/i);
-  assert.match(css, /padding:\s*12px 18px\s*!important/);
-  assert.match(css, /\.support-launcher:hover\s*\{[\s\S]*background:\s*#006f49\s*!important/i);
+  assert.match(css, /border-radius:\s*8px/);
+  assert.match(css, /background:\s*var\(--mc-action\)/);
+  assert.match(css, /padding:\s*12px 18px/);
+  assert.match(css, /\.support-launcher:hover\s*\{[\s\S]*background:\s*var\(--mc-action-hover\)/);
 });

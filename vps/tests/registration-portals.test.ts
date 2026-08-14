@@ -25,8 +25,8 @@ test("clientes y profesionales tienen entradas y rutas separadas", async () => {
   assert.match(js, /"\/registro-cliente"/);
   assert.match(js, /"\/para-profesionales"/);
   assert.match(js, /"\/registro-profesional"/);
-  assert.match(js, />Para profesionales</);
-  assert.match(js, />Crear cuenta</);
+  assert.match(js, /Ir a Para profesionales/);
+  assert.match(js, /Crear cuenta de cliente/);
   assert.doesNotMatch(js, /Tipo de cuenta<select/);
 });
 

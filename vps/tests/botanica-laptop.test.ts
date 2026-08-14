@@ -13,7 +13,7 @@ test("la portada carga los ajustes de laptop después del tema Botanica", async 
 test("el hero mantiene una escala elegante entre 1024 y 1700 px", async () => {
   const css = await readFile(cssUrl, "utf8");
   assert.match(css, /@media \(min-width:\s*1024px\) and \(max-width:\s*1700px\)/);
-  assert.match(css, /\.botanica-hero-copy h1[\s\S]*font-size:\s*clamp\(2\.8rem,\s*3\.2vw,\s*3\.2rem\)/);
+  assert.match(css, /\.botanica-hero-copy h1[\s\S]*font-size:\s*clamp\(44px,\s*3\.2vw,\s*48px\)/);
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*font-weight:\s*600/);
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*line-height:\s*1\.1/);
   assert.match(css, /\.botanica-hero-copy h1[\s\S]*letter-spacing:\s*-?\.03em/);
@@ -23,8 +23,8 @@ test("subtitlul și CTA-urile folosesc valorile aprobate pentru laptop", async (
   const css = await readFile(cssUrl, "utf8");
   assert.match(css, /\.botanica-hero-copy \.lead[\s\S]*font-size:\s*1\.05rem/);
   assert.match(css, /\.botanica-hero-copy \.lead[\s\S]*line-height:\s*1\.55/);
-  assert.match(css, /\.botanica-hero-copy \.lead[\s\S]*color:\s*#5f6872/i);
+  assert.match(css, /\.botanica-hero-copy \.lead[\s\S]*color:\s*var\(--mc-muted\)/);
   assert.match(css, /\.botanica-hero-actions \.button[\s\S]*padding:\s*12px 22px/);
   assert.match(css, /\.botanica-hero-actions \.button[\s\S]*border-radius:\s*8px/);
-  assert.match(css, /\.botanica-hero-actions \.button\.primary[\s\S]*background-color:\s*#087a55/i);
+  assert.match(css, /\.botanica-hero-actions \.button\.primary[\s\S]*background-color:\s*var\(--mc-action\)/);
 });

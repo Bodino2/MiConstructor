@@ -11,6 +11,7 @@ const reviewUiUrl = new URL("../public/verified-reviews-ui.js", import.meta.url)
 const marketingUiUrl = new URL("../public/admin-marketing-ui.js", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
 const guideNavUrl = new URL("../public/guide-nav.js", import.meta.url);
+const shellUrl = new URL("../public/site-shell.js", import.meta.url);
 
 test("opiniile verificate cer consimțământ explicit și datele vechi sunt sigilate", async () => {
   const [migration, route] = await Promise.all([
@@ -64,10 +65,11 @@ test("dashboardul QR are perioade, funnel și conversii fără telemetrie person
 test("UI-ul de review și assets de lansare sunt încărcate și JavaScript valid", async () => {
   execFileSync(process.execPath, ["--check", fileURLToPath(reviewUiUrl)], { stdio: "pipe" });
   execFileSync(process.execPath, ["--check", fileURLToPath(guideNavUrl)], { stdio: "pipe" });
-  const [reviewUi, index, nav] = await Promise.all([
+  const [reviewUi, index, nav, shell] = await Promise.all([
     readFile(reviewUiUrl, "utf8"),
     readFile(indexUrl, "utf8"),
     readFile(guideNavUrl, "utf8"),
+    readFile(shellUrl, "utf8"),
   ]);
   assert.match(reviewUi, /Valora el trabajo finalizado/);
   assert.match(reviewUi, /publicationConsent/);
@@ -77,6 +79,8 @@ test("UI-ul de review și assets de lansare sunt încărcate și JavaScript vali
   assert.match(index, /verified-reviews\.css/);
   assert.match(index, /admin-marketing-ui\.js/);
   assert.match(index, /admin-marketing\.css/);
-  assert.match(nav, /\/opiniones/);
-  assert.match(nav, /Opiniones verificadas/);
+  assert.match(nav, /MiConstructorShell/);
+  assert.match(nav, /miconstructor:shell-ready/);
+  assert.match(shell, /\/opiniones/);
+  assert.match(shell, /"Opiniones"/);
 });
