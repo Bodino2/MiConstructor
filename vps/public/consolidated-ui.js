@@ -364,7 +364,7 @@ function mcBnbBlock(form) {
   return block;
 }
 
-function mcStripGeneratedMetadata(value) {
+function mcStripSystemMetadata(value) {
   return String(value || "")
     .replace(/\n?\[MiConstructor temporada\][\s\S]*?\[\/MiConstructor temporada\]\n?/g, "\n")
     .replace(/\n?\[MiConstructor B&B\][\s\S]*?\[\/MiConstructor B&B\]\n?/g, "\n")
@@ -468,7 +468,7 @@ function mcSetupHomeServiceExtras(form, catalog, serviceSelect, frequencySelect)
     const notes = form.elements.notes;
     if (!notes) return;
     const originalVisualFrequency = frequencySelect.value;
-    let baseNotes = mcStripGeneratedMetadata(notes.value);
+    let baseNotes = mcStripSystemMetadata(notes.value);
     const blocks = [];
     const isBnb = service?.slug === "limpieza_alojamiento_turistico" || service?.bnb === true;
     if (isBnb && bnbBlock) {
