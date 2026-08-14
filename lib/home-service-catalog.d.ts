@@ -6,6 +6,8 @@ export function getHomeService(value: unknown): null | {
   vertical: string;
   requiredSpecialty: string;
   recurrence: HomeServiceFrequency[];
+  bnb?: boolean;
+  seasonal?: boolean;
 };
 export function getHomeServiceCatalog(): Array<Record<string, unknown>>;
 export function madridDateIso(date?: Date): string;
