@@ -36,6 +36,15 @@ function botanicaHomeMarkup() {
       </div>
     </section>
 
+    <section class="botanica-section" id="servicios" aria-labelledby="servicios-title">
+      <div class="botanica-section-head"><div><span class="eyebrow">UNA PLATAFORMA PARA TU PROPIEDAD</span><h2 id="servicios-title">¿Qué necesitas?</h2><p>MiConstructor mantiene flujos distintos según el trabajo: una reforma no se gestiona igual que una limpieza semanal.</p></div></div>
+      <div class="botanica-steps">
+        <article class="botanica-step"><strong class="botanica-step-number">01</strong><div><h3>Reformas y construcción</h3><p>Presupuestos, contratos, hitos, evidencias, extras controlados y pasaporte digital de la obra.</p><a class="botanica-section-link" href="/publicar?servicio=reformas">Publicar proyecto →</a></div></article>
+        <article class="botanica-step"><strong class="botanica-step-number">02</strong><div><h3>Limpieza y mantenimiento</h3><p>Hogar, profunda, fin de obra, cristales y comunidades. Puntual o con frecuencia programada.</p><a class="botanica-section-link" href="/servicios-hogar#limpieza">Ver servicios →</a></div></article>
+        <article class="botanica-step"><strong class="botanica-step-number">03</strong><div><h3>Jardín y exterior</h3><p>Jardinería, poda, césped, riego, parcelas y piscina con agenda y visitas recurrentes.</p><a class="botanica-section-link" href="/servicios-hogar#jardin">Ver servicios →</a></div></article>
+      </div>
+    </section>
+
     <section class="botanica-audiences" aria-label="Áreas de MiConstructor">
       <article class="botanica-audience-card">
         <span class="botanica-audience-icon" aria-hidden="true">⌂</span>
@@ -53,15 +62,6 @@ function botanicaHomeMarkup() {
           <a class="button" href="/para-profesionales">Crear cuenta profesional →</a>
         </div>
       </article>
-    </section>
-
-    <section class="botanica-section" id="servicios" aria-labelledby="servicios-title">
-      <div class="botanica-section-head"><div><span class="eyebrow">UNA PLATAFORMA PARA TU PROPIEDAD</span><h2 id="servicios-title">¿Qué necesitas?</h2><p>MiConstructor mantiene flujos distintos según el trabajo: una reforma no se gestiona igual que una limpieza semanal.</p></div></div>
-      <div class="botanica-steps">
-        <article class="botanica-step"><strong class="botanica-step-number">01</strong><div><h3>Reformas y construcción</h3><p>Presupuestos, contratos, hitos, evidencias, extras controlados y pasaporte digital de la obra.</p><a class="botanica-section-link" href="/publicar?servicio=reformas">Publicar proyecto →</a></div></article>
-        <article class="botanica-step"><strong class="botanica-step-number">02</strong><div><h3>Limpieza y mantenimiento</h3><p>Hogar, profunda, fin de obra, cristales y comunidades. Puntual o con frecuencia programada.</p><a class="botanica-section-link" href="/servicios-hogar#limpieza">Ver servicios →</a></div></article>
-        <article class="botanica-step"><strong class="botanica-step-number">03</strong><div><h3>Jardín y exterior</h3><p>Jardinería, poda, césped, riego, parcelas y piscina con agenda y visitas recurrentes.</p><a class="botanica-section-link" href="/servicios-hogar#jardin">Ver servicios →</a></div></article>
-      </div>
     </section>
 
     <section class="botanica-section" id="como-funciona" aria-labelledby="como-funciona-title">
