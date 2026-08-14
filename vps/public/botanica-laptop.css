@@ -1,7 +1,7 @@
 /* Refined homepage typography for laptop-sized viewports. */
 @media (min-width: 1024px) and (max-width: 1700px) {
   .botanica-hero-copy h1 {
-    font-size: clamp(2.8rem, 3.2vw, 3.2rem);
+    font-size: clamp(44px, 3.2vw, 48px);
     font-weight: 600;
     line-height: 1.1;
     letter-spacing: -.03em;
@@ -9,7 +9,7 @@
 
   .botanica-hero-copy .lead {
     max-width: 42rem;
-    color: #5f6872;
+    color: var(--mc-muted);
     font-size: 1.05rem;
     font-weight: 400;
     line-height: 1.55;
@@ -23,6 +23,6 @@
   }
 
   .botanica-hero-actions .button.primary {
-    background-color: #087a55;
+    background-color: var(--mc-action);
   }
 }

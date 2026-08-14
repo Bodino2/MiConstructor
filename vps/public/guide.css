@@ -2,26 +2,27 @@
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 64px 0 90px;
-  color: #2e2e2e;
+  color: var(--mc-text);
 }
 .guide-hero,
 .guide-detail-hero {
   padding: 38px;
   border-radius: 22px;
-  background: linear-gradient(135deg, #f4f5f7 0%, #ffffff 100%);
-  border: 1px solid rgba(44, 62, 80, .10);
+  background: #fff;
+  border: 1px solid var(--mc-border);
+  box-shadow: var(--mc-shadow);
 }
 .guide-hero h1,
 .guide-detail-hero h1 {
-  max-width: 920px;
+  max-width: 760px;
   margin: 12px 0 18px;
-  color: #2c3e50;
-  font-size: clamp(2.4rem, 6vw, 5rem);
-  line-height: 1;
-  letter-spacing: -.05em;
+  color: var(--mc-text-strong);
+  font-size: clamp(44px, 4vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -.04em;
 }
 .guide-hero p,
-.guide-detail-hero p { max-width: 850px; color: #68747d; font-size: 1.08rem; line-height: 1.7; }
+.guide-detail-hero p { max-width: 760px; color: var(--mc-muted); font-size: 1.08rem; line-height: 1.7; }
 .guide-principles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin: 24px 0 54px; }
 .guide-principles article { padding: 22px; border-radius: 14px; background: #fff; border: 1px solid rgba(44,62,80,.10); }
 .guide-principles strong,
@@ -35,7 +36,7 @@
 .guide-card { padding: 26px; border-radius: 18px; background: #fff; border: 1px solid rgba(44,62,80,.11); box-shadow: 0 16px 38px rgba(44,62,80,.07); }
 .guide-card h2 { margin: 10px 0 14px; color: #2c3e50; line-height: 1.15; }
 .guide-card p { color: #68747d; line-height: 1.6; }
-.guide-category { display: inline-block; color: #d35400; font-weight: 800; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
+.guide-category { display: inline-block; color: var(--mc-action); font-weight: 800; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
 .guide-price { color: #2c3e50; font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 900; }
 .guide-metric { color: #7f8c8d; margin: 3px 0 16px; }
 .guide-advice { display: grid; grid-template-columns: .8fr 1.2fr; gap: 34px; padding: 34px; border-radius: 20px; background: #2c3e50; color: #fff; }
@@ -43,7 +44,7 @@
 .guide-advice ol { margin: 0; padding-left: 1.3rem; color: #e9edf0; line-height: 1.8; }
 .guide-back { display: inline-block; margin-bottom: 18px; color: #2c3e50; font-weight: 800; text-decoration: none; }
 .guide-detail-price { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 24px; }
-.guide-detail-price strong { font-size: clamp(2rem, 5vw, 3.5rem); color: #d35400; }
+.guide-detail-price strong { font-size: clamp(2rem, 5vw, 3.5rem); color: var(--mc-action); }
 .guide-detail-price span { color: #68747d; font-weight: 700; }
 .guide-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .7fr); gap: 26px; margin-top: 26px; }
 .guide-detail-main,
@@ -64,4 +65,6 @@
   .guide-shell { padding-top: 36px; }
   .guide-hero,
   .guide-detail-hero { padding: 26px; }
+  .guide-hero h1,
+  .guide-detail-hero h1 { font-size: clamp(34px, 9vw, 40px); }
 }

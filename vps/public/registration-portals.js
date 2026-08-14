@@ -395,16 +395,13 @@ function bindPortalLinks(root = document) {
 }
 
 function patchAnonymousNav() {
-  if (!portalNav) return;
-  if (portalNav.querySelector('a[href="/panel"]') || portalNav.querySelector("#logout") || portalNav.textContent.includes("Salir")) return;
-  const alreadyPatched = portalNav.querySelector('a[href="/para-profesionales"]') && portalNav.querySelector('a[href="/registro-cliente"]');
-  if (alreadyPatched) { bindPortalLinks(portalNav); return; }
-  if (!portalNav.querySelector('a[href="/login"]') && portalNav.children.length) return;
-  portalNav.innerHTML = `
-    <a href="/login" data-link>Entrar</a>
-    <a href="/para-profesionales" data-portal-link>Para profesionales</a>
-    <a class="primary" href="/registro-cliente" data-portal-link>Crear cuenta</a>`;
-  bindPortalLinks(portalNav);
+  const refresh = (shell) => void shell.refreshHeader();
+  if (window.MiConstructorShell) refresh(window.MiConstructorShell);
+  else window.addEventListener(
+    "miconstructor:shell-ready",
+    (event) => refresh(event.detail),
+    { once: true },
+  );
 }
 
 function patchPublicLanding() {

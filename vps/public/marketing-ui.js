@@ -3,7 +3,6 @@
   if (!match) return;
 
   const app = document.querySelector("#app");
-  const nav = document.querySelector("#main-nav");
   const slug = match[1];
   const provinces = [
     "A Coruña", "Araba/Álava", "Albacete", "Alicante/Alacant", "Almería", "Asturias", "Ávila",
@@ -50,11 +49,6 @@
     const provinceOptions = provinces.map((province) => `<option value="${escapeHtml(province)}">${escapeHtml(province)}</option>`).join("");
     document.body.classList.add("marketing-campaign-page");
     document.title = `${campaign.headline} | MiConstructor`;
-    if (nav) {
-      nav.innerHTML = professional
-        ? '<a href="/login">Entrar</a><a class="primary" href="/registro-profesional">Crear perfil</a>'
-        : '<a href="/login">Entrar</a><a class="primary" href="/registro-cliente">Publicar proyecto</a>';
-    }
     app.innerHTML = `<section class="marketing-hero">
       <div class="marketing-hero-copy">
         <span class="marketing-eyebrow">MICONSTRUCTOR · ESPAÑA</span>

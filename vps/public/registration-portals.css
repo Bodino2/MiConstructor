@@ -1,4 +1,4 @@
-[data-registration-portal] input[type="hidden"] { display: none !important; }
+[data-registration-portal] input[type="hidden"] { display: none; }
 
 .portal-shell {
   width: min(1180px, calc(100% - 32px));
@@ -13,9 +13,9 @@
 
 .portal-heading h1,
 .professional-portal h1 {
-  font-size: clamp(44px, 6vw, 76px);
-  line-height: 1;
-  letter-spacing: -.055em;
+  font-size: clamp(44px, 4vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -.04em;
   margin: 14px 0 22px;
 }
 
@@ -53,14 +53,9 @@
   margin-top: auto;
 }
 
-.client-choice {
-  border-top: 5px solid var(--orange);
-}
+.client-choice { border-top: 4px solid var(--mc-action); }
 
-.professional-choice {
-  border-top: 5px solid var(--teal);
-  background: linear-gradient(145deg, #fff 0%, #f0f8f6 100%);
-}
+.professional-choice { border-top: 4px solid var(--mc-action); background: #fff; }
 
 .portal-badge {
   display: inline-flex;
@@ -89,10 +84,7 @@
   text-align: left;
 }
 
-.professional-entry-button {
-  border-color: var(--teal);
-  color: #165f5b;
-}
+.professional-entry-button { border-color: var(--mc-action); color: var(--mc-action); }
 
 .professional-portal-hero {
   display: grid;
@@ -102,10 +94,7 @@
   padding: 18px 0 48px;
 }
 
-.professional-value-card {
-  border-top: 5px solid var(--teal);
-  background: linear-gradient(145deg, #ffffff, #edf8f6);
-}
+.professional-value-card { border-top: 4px solid var(--mc-action); background: #fff; }
 
 .professional-value-card h2 {
   margin: 16px 0 10px;
@@ -135,7 +124,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--mc-action);
   color: #fff;
   flex: 0 0 auto;
 }
@@ -147,8 +136,8 @@
 }
 
 .professional-benefits article {
-  border-left: 4px solid var(--teal);
-  background: rgba(255,255,255,.72);
+  border-left: 4px solid var(--mc-action);
+  background: #fff;
   border-radius: 0 12px 12px 0;
   padding: 18px;
 }
@@ -181,7 +170,7 @@
 @media (max-width: 640px) {
   .portal-shell { padding-top: 30px; }
   .portal-heading h1,
-  .professional-portal h1 { font-size: clamp(38px, 12vw, 54px); }
+  .professional-portal h1 { font-size: clamp(34px, 9vw, 40px); }
   .portal-form-actions { flex-direction: column-reverse; align-items: stretch; }
   .portal-form-actions .button { width: 100%; }
 }

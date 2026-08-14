@@ -1,6 +1,5 @@
 const state = { user: null, assessment: null, projects: [], billing: null, tab: "overview" };
 const app = document.querySelector("#app");
-const nav = document.querySelector("#main-nav");
 const toast = document.querySelector("#toast");
 
 const money = (cents) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(cents || 0) / 100);
@@ -38,15 +37,13 @@ function bindLinks() {
 }
 
 function updateNav() {
-  nav.innerHTML = state.user
-    ? `<a href="/panel" data-link>Panel</a><button id="logout">Salir</button>`
-    : `<a href="/login" data-link>Entrar</a><a class="primary" href="/registro" data-link>Crear cuenta</a>`;
-  bindLinks();
-  document.querySelector("#logout")?.addEventListener("click", async () => {
-    await api("/api/v1/auth/logout", { method: "POST" });
-    state.user = null;
-    go("/");
-  });
+  const syncHeader = (shell) => shell.setUser(state.user);
+  if (window.MiConstructorShell) syncHeader(window.MiConstructorShell);
+  else window.addEventListener(
+    "miconstructor:shell-ready",
+    (event) => syncHeader(event.detail),
+    { once: true },
+  );
 }
 
 function landing() {

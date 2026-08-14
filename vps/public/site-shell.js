@@ -57,6 +57,74 @@
     return currentUser;
   }
 
+  function currentPage(href) {
+    if (href === "/guia") return location.pathname.startsWith("/guia");
+    if (href === "/opiniones") return location.pathname === "/opiniones";
+    if (href === "/para-profesionales") return location.pathname === "/para-profesionales" || location.pathname === "/registro-profesional";
+    if (href === "/panel") return location.pathname === "/panel";
+    return false;
+  }
+
+  function shellLink(href, label, className = "") {
+    return `<a href="${href}"${className ? ` class="${className}"` : ""}${currentPage(href) ? ' aria-current="page"' : ""}>${label}</a>`;
+  }
+
+  function normalizeLegacyServiceLabels(root = document) {
+    root.querySelectorAll('.dropdown-menu a[href^="/publicar?servicio="]').forEach((link) => {
+      const label = String(link.textContent || "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+      if (label) link.textContent = label;
+    });
+  }
+
+  function sharedNavHtml(user) {
+    const account = user
+      ? `<details class="site-account-dropdown"><summary>Mi Cuenta</summary><div class="site-account-menu">${shellLink("/panel", "Panel")}${user.role === "cliente" ? '<a href="/servicios-hogar">Mis solicitudes</a>' : ""}<button type="button" data-site-logout>Salir</button></div></details>`
+      : "";
+    return `<button class="site-menu-toggle" type="button" aria-expanded="false">Menú</button>
+      <div class="site-nav-inner" data-open="false">
+        <div class="site-nav-primary">
+          <details class="site-nav-dropdown"><summary>Servicios</summary><div class="site-nav-menu"><a href="/publicar?servicio=reformas">Reformas</a><a href="/publicar?servicio=limpieza">Limpieza</a><a href="/publicar?servicio=jardineria">Jardinería</a></div></details>
+          ${user ? "" : '<a href="/#como-funciona">Cómo funciona</a>'}
+          ${shellLink("/guia", "Guía de precios")}
+          ${shellLink("/opiniones", "Opiniones")}
+        </div>
+        <div class="site-nav-actions">${user ? account : `${shellLink("/para-profesionales", "¿Eres profesional?")}${shellLink("/login", "Entrar")}<a class="site-nav-cta" href="/publicar?servicio=reformas">Pedir presupuesto</a>`}</div>
+      </div>`;
+  }
+
+  function renderSharedHeader(user) {
+    const nav = document.querySelector("#main-nav");
+    if (!nav) return;
+    const signature = `${user?.id || "guest"}:${user?.role || "anonymous"}:${location.pathname}`;
+    if (nav.dataset.siteSignature === signature && nav.classList.contains("site-nav")) return;
+    nav.dataset.siteSignature = signature;
+    nav.className = "site-nav";
+    nav.innerHTML = sharedNavHtml(user);
+    const inner = nav.querySelector(".site-nav-inner");
+    const toggle = nav.querySelector(".site-menu-toggle");
+    toggle?.addEventListener("click", () => {
+      const opening = inner?.dataset.open !== "true";
+      if (inner) inner.dataset.open = String(opening);
+      toggle.setAttribute("aria-expanded", String(opening));
+    });
+    nav.querySelector("[data-site-logout]")?.addEventListener("click", async () => {
+      await api("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+      currentUser = null;
+      window.location.assign("/");
+    });
+  }
+
+  async function refreshHeader(force = false) {
+    const user = await getCurrentUser(force);
+    renderSharedHeader(user);
+    return user;
+  }
+
+  function setShellUser(user) {
+    currentUser = user || null;
+    renderSharedHeader(currentUser);
+  }
+
   function injectRegistrationLegal() {
     const form = document.querySelector("#register-form");
     if (!form || form.querySelector("#termsAccepted")) return;
@@ -263,6 +331,8 @@
 
   async function init() {
     const config = await getRuntimeConfig();
+    normalizeLegacyServiceLabels();
+    await refreshHeader();
     ensureFooter(config);
     ensureSupportShell();
     showCookieBanner(false);
@@ -271,12 +341,18 @@
     await renderLegalIfNeeded();
 
     const observer = new MutationObserver(() => {
+      normalizeLegacyServiceLabels();
       injectRegistrationLegal();
       injectSepaLegal();
       if (legalPaths.has(location.pathname) && !document.querySelector("#app .legal-shell")) void renderLegalIfNeeded();
     });
     observer.observe(document.querySelector("#app") || document.body, { childList: true, subtree: true });
   }
+
+  window.MiConstructorShell = { refreshHeader, setUser: setShellUser };
+  window.dispatchEvent(new CustomEvent("miconstructor:shell-ready", {
+    detail: window.MiConstructorShell,
+  }));
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => void init());
   else void init();
