@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
+import { estimateHomeServicePrice } from "../../../lib/home-service-pricing.js";
 import {
   evaluateProfessionalAssessment,
   getProfessionalSpecialties,
@@ -73,7 +74,10 @@ export function marketplaceRouter(database: Database, config: AppConfig, stripe 
   });
 
   router.post("/estimate", (request, response) => {
-    const estimate = estimateProjectPrice(request.body);
+    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const estimate = typeof body.serviceSlug === "string"
+      ? estimateHomeServicePrice(body)
+      : estimateProjectPrice(body);
     if (!estimate.valid) return response.status(400).json(estimate);
     response.json(estimate);
   });
