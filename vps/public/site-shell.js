@@ -2,6 +2,7 @@
   const nativeFetch = window.fetch.bind(window);
   const legalPaths = new Set(["/aviso-legal", "/privacidad", "/cookies", "/terminos", "/sepa", "/contacto"]);
   const cookieKey = "miconstructor_cookie_consent_v1";
+  const headerNavigationMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 900px)") : null;
   let runtimeConfig = null;
   let currentUser;
   let supportUserId = null;
@@ -76,6 +77,13 @@
     });
   }
 
+  function serviceNavigationHtml() {
+    if (headerNavigationMedia?.matches === true) {
+      return '<details class="site-nav-dropdown"><summary>Servicios</summary><div class="site-nav-menu"><a href="/publicar?servicio=reformas">Reformas</a><a href="/publicar?servicio=limpieza">Limpieza</a><a href="/publicar?servicio=jardineria">Jardinería</a></div></details>';
+    }
+    return `${shellLink("/publicar?servicio=reformas", "Reformas")}${shellLink("/publicar?servicio=limpieza", "Limpieza")}${shellLink("/publicar?servicio=jardineria", "Jardinería")}`;
+  }
+
   function sharedNavHtml(user) {
     const account = user
       ? `<details class="site-account-dropdown"><summary>Mi Cuenta</summary><div class="site-account-menu">${shellLink("/panel", "Panel")}${user.role === "cliente" ? '<a href="/servicios-hogar">Mis solicitudes</a>' : ""}<button type="button" data-site-logout>Salir</button></div></details>`
@@ -83,7 +91,7 @@
     return `<button class="site-menu-toggle" type="button" aria-expanded="false">Menú</button>
       <div class="site-nav-inner" data-open="false">
         <div class="site-nav-primary">
-          <details class="site-nav-dropdown"><summary>Servicios</summary><div class="site-nav-menu"><a href="/publicar?servicio=reformas">Reformas</a><a href="/publicar?servicio=limpieza">Limpieza</a><a href="/publicar?servicio=jardineria">Jardinería</a></div></details>
+          ${serviceNavigationHtml()}
           ${user ? "" : '<a href="/#como-funciona">Cómo funciona</a>'}
           ${shellLink("/guia", "Guía de precios")}
           ${shellLink("/opiniones", "Opiniones")}
@@ -95,7 +103,8 @@
   function renderSharedHeader(user) {
     const nav = document.querySelector("#main-nav");
     if (!nav) return;
-    const signature = `${user?.id || "guest"}:${user?.role || "anonymous"}:${location.pathname}`;
+    const navigationMode = headerNavigationMedia?.matches === true ? "mobile" : "desktop";
+    const signature = `${user?.id || "guest"}:${user?.role || "anonymous"}:${location.pathname}:${navigationMode}`;
     if (nav.dataset.siteSignature === signature && nav.classList.contains("site-nav")) return;
     nav.dataset.siteSignature = signature;
     nav.className = "site-nav";
@@ -333,6 +342,7 @@
     const config = await getRuntimeConfig();
     normalizeLegacyServiceLabels();
     await refreshHeader();
+    headerNavigationMedia?.addEventListener?.("change", () => renderSharedHeader(currentUser));
     ensureFooter(config);
     ensureSupportShell();
     showCookieBanner(false);
