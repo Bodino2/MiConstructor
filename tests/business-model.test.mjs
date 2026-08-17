@@ -111,7 +111,7 @@ test("el estimador devuelve rango y partidas que cuadran con el total", () => {
     qualityLevel: "estandar",
   });
   assert.equal(estimate.valid, true);
-  assert.deepEqual(estimate.range, { minimum: 32_200, maximum: 45_500 });
+  assert.deepEqual(estimate.range, { minimum: 38_675, maximum: 52_325 });
   const minimumParts = Object.values(estimate.breakdown).reduce(
     (sum, item) => sum + item.minimum,
     0,
