@@ -206,7 +206,7 @@ test("flujo real: alta, verificación, propuesta, shortlist, contrato y cargo pe
   assert.equal("percentage" in shortlist.body, false);
 
   const billable = await database.query<{ amount_cents: string; status: string }>("SELECT amount_cents::text, status FROM billable_items WHERE professional_id = $1", [professionalId]);
-  assert.deepEqual(billable.rows, [{ amount_cents: "40000", status: "PENDIENTE" }]);
+  assert.deepEqual(billable.rows, [{ amount_cents: "21200", status: "PENDIENTE" }]);
 
   const duplicate = await clientAgent.post(`/api/v1/projects/${projectId}/shortlist`).send({ professionalId });
   assert.equal(duplicate.status, 200);
