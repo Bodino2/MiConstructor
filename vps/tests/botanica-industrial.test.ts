@@ -110,6 +110,7 @@ test("la navegación completa permanece tras refrescar una sesión autenticada",
   assert.match(shell, /\/servicios-hogar/);
   assert.match(shell, /\/para-profesionales/);
   assert.match(shell, /\/guia/);
+  assert.match(shell, /\/calculadores/);
   assert.match(shell, /\/opiniones/);
 });
 
@@ -124,6 +125,7 @@ test("la portada usa la navegación marketplace solicitada y separa acceso anón
   assert.match(shell, /<details class="site-nav-dropdown"><summary>Servicios<\/summary>/);
   assert.match(shell, />Cómo funciona<\/a>/);
   assert.match(shell, /"Guía de precios"/);
+  assert.match(shell, /"Calculadoras"/);
   assert.match(shell, /"Opiniones"/);
   assert.match(shell, /"¿Eres profesional\?"/);
   assert.match(shell, />Pedir presupuesto<\/a>/);
