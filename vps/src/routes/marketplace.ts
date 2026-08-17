@@ -21,7 +21,7 @@ const projectSchema = z.object({
   title: z.string().trim().min(5).max(160),
   description: z.string().trim().min(30).max(5000),
   category: z.string().trim().min(2).max(80),
-  projectType: z.enum(["bano", "cocina", "reforma_integral", "construccion_casa"]),
+  projectType: z.enum(["bano", "cocina", "reforma_parcial", "reforma_integral", "fachadas_exteriores"]),
   location: z.string().trim().min(2).max(160),
   squareMeters: z.coerce.number().positive().max(1000),
   qualityLevel: z.enum(["basico", "estandar", "premium"]),
@@ -92,15 +92,12 @@ export function marketplaceRouter(database: Database, config: AppConfig, stripe 
         projectType: parsed.data.projectType,
         squareMeters: parsed.data.squareMeters,
         qualityLevel: parsed.data.qualityLevel,
+        location: parsed.data.location,
       }) as { valid: boolean; range?: { minimum: number; maximum: number }; version?: string };
       if (!estimate.valid || !estimate.range) {
         return response.status(400).json({ error: "No se puede estimar esta categoría todavía." });
       }
-      const suggestedBudgetCents = Math.round(((estimate.range.minimum + estimate.range.maximum) / 2) * 100);
-      const budgetCents = parsed.data.budgetCents ?? suggestedBudgetCents;
-      if (budgetCents < Math.round(estimate.range.minimum * 50) || budgetCents > Math.round(estimate.range.maximum * 200)) {
-        return response.status(400).json({ error: "El presupuesto indicado queda fuera de un rango razonable para los datos introducidos." });
-      }
+      const budgetCents = Math.round(((estimate.range.minimum + estimate.range.maximum) / 2) * 100);
       const id = randomUUID();
       await withTransaction(database, async (client) => {
         await client.query(
