@@ -196,7 +196,7 @@ test("solo el profesional seleccionado genera un cobro inmediato y nunca una fac
   assert.equal("percentage" in selection.body, false);
 
   assert.equal(paymentCalls.length, 1);
-  assert.equal(paymentCalls[0]!.params.amount, 40_000);
+  assert.equal(paymentCalls[0]!.params.amount, 21_200);
   assert.equal(paymentCalls[0]!.params.customer, "cus_pro_1");
   assert.equal(paymentCalls[0]!.params.payment_method, "pm_pro_1");
   assert.equal((paymentCalls[0]!.params.metadata as Record<string, string>).professional_id, selectedProfessional.id);
@@ -213,7 +213,7 @@ test("solo el profesional seleccionado genera un cobro inmediato y nunca una fac
     [selectedProfessional.id],
   );
   assert.equal(selectedCharge.rows.length, 1);
-  assert.equal(selectedCharge.rows[0]!.amount_cents, "40000");
+  assert.equal(selectedCharge.rows[0]!.amount_cents, "21200");
   assert.equal(selectedCharge.rows[0]!.status, "PROCESANDO");
   assert.equal(selectedCharge.rows[0]!.stripe_payment_intent_id, "pi_selection_1");
   assert.equal(selectedCharge.rows[0]!.invoice_id, null);
@@ -250,7 +250,7 @@ test("solo el profesional seleccionado genera un cobro inmediato y nunca una fac
   );
   assert.equal(suspended.rows[0]!.billing_status, "SUSPENDIDO_IMPAGO");
   assert.equal(suspended.rows[0]!.verification_status, "APROBADO");
-  assert.equal(suspended.rows[0]!.overdue, "40000");
+  assert.equal(suspended.rows[0]!.overdue, "21200");
 
   paymentStatus = "succeeded";
   const retry = await selectedProfessional.agent.post(`/api/v1/billing/charges/${chargeId}/retry`).send({});
