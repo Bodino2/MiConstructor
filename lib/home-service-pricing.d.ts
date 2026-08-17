@@ -28,10 +28,14 @@ export function estimateHomeServicePrice(input?: {
   bedrooms?: number | string;
   bathrooms?: number | string;
   qualityLevel?: HomeServiceQuality | string;
+  frequency?: HomeServiceFrequency | string;
+  seasonal?: boolean;
 }): Record<string, unknown> & {
   valid: boolean;
   error?: string;
+  pricingPeriod?: "SERVICIO" | "VISITA" | "MES" | "ANO";
   range?: { minimum: number; median: number; maximum: number };
+  annualizedRange?: { minimum: number; median: number; maximum: number } | null;
 };
 
 export function annualizeHomeServiceValue(input?: {
