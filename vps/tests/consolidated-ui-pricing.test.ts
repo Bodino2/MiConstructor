@@ -22,7 +22,9 @@ interface CatalogVertical {
 interface HomeEstimate {
   valid: boolean;
   zone?: string;
+  pricingPeriod?: string;
   range?: { minimum: number; median: number; maximum: number };
+  annualizedRange?: { minimum: number; median: number; maximum: number } | null;
 }
 
 interface MonetizationResult {
@@ -35,9 +37,11 @@ interface ProjectEstimate {
   valid: boolean;
   input?: { locationZone?: string };
   range?: { minimum: number; maximum: number };
+  realistic?: number;
 }
 
 const publicUiUrl = new URL("../public/consolidated-ui.js", import.meta.url);
+const estimatorMatrixUiUrl = new URL("../public/estimator-matrix-ui.js", import.meta.url);
 const publicCssUrl = new URL("../public/consolidated-ui.css", import.meta.url);
 const indexUrl = new URL("../public/index.html", import.meta.url);
 const marketplaceUrl = new URL("../src/routes/marketplace.ts", import.meta.url);
@@ -56,19 +60,44 @@ test("el catálogo incorpora B&B sin exponer la matriz interna de precios", () =
   assert.equal("percentage" in service, false);
 });
 
-test("la estimación de servicios usa cantidad, zona y devuelve un rango coherente", () => {
-  const estimate = estimateHomeServicePrice({
+test("la estimación de servicios aplica la matriz determinista oficial y el rango de ±15%", () => {
+  const puntual = estimateHomeServicePrice({
     serviceSlug: "limpieza_profunda",
     location: "Linares, Jaén",
     squareMeters: 90,
-    qualityLevel: "estandar",
+    frequency: "PUNTUAL",
   }) as HomeEstimate;
-  assert.equal(estimate.valid, true);
-  assert.equal(estimate.zone, "ANDALUCIA");
-  assert.ok(estimate.range);
-  assert.ok(estimate.range.minimum > 0);
-  assert.ok(estimate.range.minimum < estimate.range.median);
-  assert.ok(estimate.range.median < estimate.range.maximum);
+  assert.equal(puntual.valid, true);
+  assert.equal(puntual.zone, "ANDALUCIA");
+  assert.deepEqual(puntual.range, { minimum: 91_800, median: 108_000, maximum: 124_200 });
+
+  const recurrente = estimateHomeServicePrice({
+    serviceSlug: "limpieza_hogar",
+    location: "Linares, Jaén",
+    estimatedHours: 4,
+    frequency: "SEMANAL",
+  }) as HomeEstimate;
+  assert.equal(recurrente.valid, true);
+  assert.equal(recurrente.pricingPeriod, "VISITA");
+  assert.deepEqual(recurrente.range, { minimum: 4_760, median: 5_600, maximum: 6_440 });
+  assert.deepEqual(recurrente.annualizedRange, { minimum: 247_520, median: 291_200, maximum: 334_880 });
+
+  const jardin = estimateHomeServicePrice({
+    serviceSlug: "jardineria_mantenimiento",
+    location: "Jaén",
+    squareMeters: 150,
+    frequency: "MENSUAL",
+  }) as HomeEstimate;
+  assert.equal(jardin.pricingPeriod, "MES");
+  assert.deepEqual(jardin.range, { minimum: 10_200, median: 12_000, maximum: 13_800 });
+
+  const piscina = estimateHomeServicePrice({
+    serviceSlug: "mantenimiento_piscina",
+    location: "Jaén",
+    frequency: "MENSUAL",
+  }) as HomeEstimate;
+  assert.equal(piscina.pricingPeriod, "ANO");
+  assert.deepEqual(piscina.range, { minimum: 102_000, median: 120_000, maximum: 138_000 });
 });
 
 test("la recurrencia anualiza 60 euros semanales a 3.120 euros", () => {
@@ -87,16 +116,31 @@ test("el simulador privado monetiza sobre el valor recurrente y no sobre una sol
   assert.ok(result.feeCents < result.basisCents);
 });
 
-test("el estimator de reformas aplica localidad sin exigir un índice manual", () => {
-  const jaen = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Jaén" }) as ProjectEstimate;
-  const madrid = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Madrid" }) as ProjectEstimate;
-  assert.equal(jaen.valid, true);
-  assert.equal(madrid.valid, true);
-  assert.equal(jaen.input?.locationZone, "ANDALUCIA");
-  assert.equal(madrid.input?.locationZone, "MADRID");
-  assert.ok(jaen.range);
-  assert.ok(madrid.range);
-  assert.ok(madrid.range.minimum > jaen.range.minimum);
+test("el estimator de reformas aplica exactamente la matriz oficial sin multiplicadores territoriales", () => {
+  const bano5 = estimateProjectPrice({ projectType: "bano", squareMeters: 5, qualityLevel: "estandar", location: "Jaén" }) as ProjectEstimate;
+  assert.equal(bano5.valid, true);
+  assert.equal(bano5.realistic, 4_200);
+  assert.deepEqual(bano5.range, { minimum: 3_570, maximum: 4_830 });
+
+  const bano20Premium = estimateProjectPrice({ projectType: "bano", squareMeters: 20, qualityLevel: "premium", location: "Madrid" }) as ProjectEstimate;
+  assert.equal(bano20Premium.realistic, 12_500);
+  assert.deepEqual(bano20Premium.range, { minimum: 10_625, maximum: 14_375 });
+
+  const integralJaen = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Jaén" }) as ProjectEstimate;
+  const integralMadrid = estimateProjectPrice({ projectType: "reforma_integral", squareMeters: 80, qualityLevel: "estandar", location: "Madrid" }) as ProjectEstimate;
+  assert.equal(integralJaen.realistic, 52_000);
+  assert.deepEqual(integralJaen.range, { minimum: 44_200, maximum: 59_800 });
+  assert.deepEqual(integralMadrid.range, integralJaen.range);
+  assert.equal(integralJaen.input?.locationZone, "ANDALUCIA");
+  assert.equal(integralMadrid.input?.locationZone, "MADRID");
+
+  const parcial = estimateProjectPrice({ projectType: "reforma_parcial", squareMeters: 50, qualityLevel: "basico" }) as ProjectEstimate;
+  assert.equal(parcial.realistic, 6_000);
+  assert.deepEqual(parcial.range, { minimum: 5_100, maximum: 6_900 });
+
+  const fachada = estimateProjectPrice({ projectType: "fachadas_exteriores", squareMeters: 100, qualityLevel: "estandar" }) as ProjectEstimate;
+  assert.equal(fachada.realistic, 8_500);
+  assert.deepEqual(fachada.range, { minimum: 7_225, maximum: 9_775 });
 });
 
 test("el endpoint de estimación existente enruta también servicios sin crear una API pública nueva", async () => {
@@ -104,11 +148,18 @@ test("el endpoint de estimación existente enruta también servicios sin crear u
   assert.match(source, /router\.post\("\/estimate"/);
   assert.match(source, /estimateHomeServicePrice\(body\)/);
   assert.match(source, /estimateProjectPrice\(body\)/);
+  assert.match(source, /"reforma_parcial"/);
+  assert.match(source, /"fachadas_exteriores"/);
 });
 
 test("el módulo consolidado es JavaScript válido y elimina el presupuesto editable en runtime", async () => {
   execFileSync(process.execPath, ["--check", publicUiUrl.pathname], { stdio: "pipe" });
-  const source = await readFile(publicUiUrl, "utf8");
+  execFileSync(process.execPath, ["--check", estimatorMatrixUiUrl.pathname], { stdio: "pipe" });
+  const [source, matrixUi, html] = await Promise.all([
+    readFile(publicUiUrl, "utf8"),
+    readFile(estimatorMatrixUiUrl, "utf8"),
+    readFile(indexUrl, "utf8"),
+  ]);
   assert.match(source, /mcReplaceManualBudget/);
   assert.match(source, /hidden\.type = "hidden"/);
   assert.match(source, /\?servicio=\$\{encodeURIComponent\(route\[0\]\)\}&tipo=/);
@@ -117,6 +168,11 @@ test("el módulo consolidado es JavaScript válido y elimina el presupuesto edit
   assert.match(source, /Modalidad B&B/);
   assert.match(source, /fetch\("\/api\/v1\/estimate"/);
   assert.doesNotMatch(source, /rate:\s*0\.0[345]/);
+  assert.match(matrixUi, /Rango orientativo calculado por la plataforma\. El precio final lo determina el presupuesto profesional\./);
+  assert.match(matrixUi, /payload\.frequency = context\.frequency/);
+  assert.match(matrixUi, /reforma_parcial/);
+  assert.match(matrixUi, /fachadas_exteriores/);
+  assert.match(html, /consolidated-ui\.js[\s\S]*estimator-matrix-ui\.js/);
 });
 
 test("el override final garantiza contraste del dropdown y se carga después del resto del diseño", async () => {
