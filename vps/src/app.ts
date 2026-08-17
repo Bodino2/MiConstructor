@@ -13,6 +13,7 @@ import { adminBillingRouter } from "./routes/admin-billing.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { billingRouter, stripeClient, stripeWebhookHandler } from "./routes/billing.js";
+import { calculatorPagesRouter } from "./routes/calculator-pages.js";
 import { contentRouter } from "./routes/content.js";
 import { evidenceUploadsRouter } from "./routes/evidence-uploads.js";
 import { executionRouter } from "./routes/execution.js";
@@ -139,6 +140,8 @@ export function createApp(dependencies: { database: Database; config: AppConfig;
   app.use("/api/v1", writeLimiter, legalSupportRouter(database));
   app.use("/api/v1", writeLimiter, adminBillingRouter(database));
   app.use("/api/v1", writeLimiter, adminRouter(database));
+
+  app.use(calculatorPagesRouter(config));
 
   // Public Guía HTML, sitemap/robots and admin CMS API share one source of truth.
   // It is mounted before the static SPA fallback so crawlers receive real article HTML and metadata.
