@@ -172,7 +172,22 @@ test("el módulo consolidado es JavaScript válido y elimina el presupuesto edit
   assert.match(matrixUi, /payload\.frequency = context\.frequency/);
   assert.match(matrixUi, /reforma_parcial/);
   assert.match(matrixUi, /fachadas_exteriores/);
-  assert.match(html, /consolidated-ui\.js[\s\S]*estimator-matrix-ui\.js/);
+  assert.match(matrixUi, /estandar:\s*\{ base:\s*4_200, incrementPerExtraSquareMeter:\s*220 \}/);
+  assert.match(matrixUi, /minimum:\s*Math\.round\(realistic \* 0\.85\)/);
+  assert.match(matrixUi, /maximum:\s*Math\.round\(realistic \* 1\.15\)/);
+  assert.match(matrixUi, /form\.dataset\.mcProjectEstimate = "true"/);
+  assert.match(matrixUi, /const squareMeters = Number\(form\.elements\.squareMeters\?\.value\) \|\| 0/);
+  assert.doesNotMatch(matrixUi, /console\.error/);
+  assert.doesNotMatch(matrixUi, /Calculando rango orientativo/);
+
+  const syncStart = matrixUi.indexOf("function mcEstimatorSetupProject");
+  const syncEnd = matrixUi.indexOf("function mcEstimatorFormatHomeRange");
+  assert.ok(syncStart >= 0 && syncEnd > syncStart);
+  const syncSource = matrixUi.slice(syncStart, syncEnd);
+  assert.doesNotMatch(syncSource, /\basync\b|\bawait\b|\bfetch\s*\(|setTimeout/);
+  assert.match(syncSource, /addEventListener\("input", calculate\)/);
+  assert.match(syncSource, /addEventListener\("change", calculate\)/);
+  assert.match(html, /estimator-matrix-ui\.js[\s\S]*consolidated-ui\.js/);
 });
 
 test("el override final garantiza contraste del dropdown y se carga después del resto del diseño", async () => {
