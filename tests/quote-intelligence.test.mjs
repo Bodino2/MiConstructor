@@ -3,7 +3,7 @@ import test from "node:test";
 import { estimateProjectPrice, PROJECT_ESTIMATOR_VERSION } from "../lib/project-estimator.js";
 import { analyzeQuote, compareQuotes } from "../lib/quote-intelligence.js";
 
-test("estimador v2 devuelve mínimo, realista, máximo y factores explicables", () => {
+test("estimador determinista devuelve mínimo, realista y máximo según la matriz oficial", () => {
   const estimate = estimateProjectPrice({
     projectType: "reforma_integral",
     squareMeters: 90,
@@ -18,14 +18,13 @@ test("estimador v2 devuelve mínimo, realista, máximo y factores explicables", 
   });
   assert.equal(estimate.valid, true);
   assert.equal(estimate.version, PROJECT_ESTIMATOR_VERSION);
-  assert.ok(estimate.range.minimum < estimate.range.realistic);
-  assert.ok(estimate.range.realistic < estimate.range.maximum);
-  assert.ok(estimate.drivers.some((driver) => driver.key === "sinAscensor"));
-  assert.ok(estimate.drivers.some((driver) => driver.key === "electricidad"));
-  assert.ok(estimate.breakdown.instalaciones.realistic > 0);
+  assert.equal(estimate.realistic, 58_500);
+  assert.deepEqual(estimate.range, { minimum: 49_725, maximum: 67_275 });
+  assert.deepEqual(estimate.drivers, []);
+  assert.equal(estimate.breakdown.calculatedValue.realistic, 58_500);
 });
 
-test("más complejidad produce un rango superior manteniendo compatibilidad básica", () => {
+test("los antiguos multiplicadores de complejidad no alteran la matriz determinista", () => {
   const basic = estimateProjectPrice({ projectType: "bano", squareMeters: 6, qualityLevel: "estandar" });
   const complex = estimateProjectPrice({
     projectType: "bano",
@@ -39,7 +38,9 @@ test("más complejidad produce un rango superior manteniendo compatibilidad bás
   });
   assert.equal(basic.valid, true);
   assert.equal(complex.valid, true);
-  assert.ok(complex.range.realistic > basic.range.realistic);
+  assert.equal(basic.realistic, 4_420);
+  assert.deepEqual(complex.range, basic.range);
+  assert.equal(complex.realistic, basic.realistic);
   assert.ok("minimum" in basic.range && "maximum" in basic.range);
 });
 
