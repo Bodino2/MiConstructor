@@ -6,6 +6,38 @@ const MC_ESTIMATOR_PROJECT_TYPES = [
   ["reforma_parcial", "Reforma parcial / salón / dormitorio"],
   ["fachadas_exteriores", "Fachadas y exteriores"],
 ];
+const MC_ESTIMATOR_PROJECT_MATRIX = {
+  bano: {
+    mode: "BASE_PLUS_INCREMENT",
+    standardArea: 5,
+    prices: {
+      basico: { base: 2_600, incrementPerExtraSquareMeter: 150 },
+      estandar: { base: 4_200, incrementPerExtraSquareMeter: 220 },
+      premium: { base: 6_800, incrementPerExtraSquareMeter: 380 },
+    },
+  },
+  cocina: {
+    mode: "BASE_PLUS_INCREMENT",
+    standardArea: 8,
+    prices: {
+      basico: { base: 3_500, incrementPerExtraSquareMeter: 180 },
+      estandar: { base: 5_800, incrementPerExtraSquareMeter: 280 },
+      premium: { base: 9_500, incrementPerExtraSquareMeter: 450 },
+    },
+  },
+  reforma_parcial: {
+    mode: "PER_SQUARE_METER",
+    prices: { basico: 120, estandar: 220, premium: 380 },
+  },
+  reforma_integral: {
+    mode: "PER_SQUARE_METER",
+    prices: { basico: 400, estandar: 650, premium: 1_050 },
+  },
+  fachadas_exteriores: {
+    mode: "PER_SQUARE_METER",
+    prices: { basico: 45, estandar: 85, premium: 140 },
+  },
+};
 const MC_ESTIMATOR_HOME_SERVICES = new Set([
   "limpieza_hogar",
   "limpieza_profunda",
@@ -93,6 +125,118 @@ function mcEstimatorNormalizeQuality(select) {
   select.dataset.mcOfficialMatrix = "true";
 }
 
+function mcEstimatorProjectRangeFromValue(value) {
+  const realistic = Math.round(Number(value) || 0);
+  if (realistic <= 0) throw new Error("invalid_estimator_value");
+  return {
+    minimum: Math.round(realistic * 0.85),
+    realistic,
+    maximum: Math.round(realistic * 1.15),
+  };
+}
+
+function mcEstimatorCalculateProjectRange(projectType, qualityLevel, rawSquareMeters) {
+  const squareMeters = Number(rawSquareMeters) || 0;
+  const type = MC_ESTIMATOR_PROJECT_MATRIX[projectType];
+  const price = type?.prices?.[qualityLevel];
+  if (!type || price == null || squareMeters <= 0) throw new Error("invalid_estimator_input");
+
+  let calculatedValue = 0;
+  if (type.mode === "BASE_PLUS_INCREMENT") {
+    const extraSquareMeters = Math.max(0, squareMeters - type.standardArea);
+    calculatedValue = price.base + extraSquareMeters * price.incrementPerExtraSquareMeter;
+  } else {
+    calculatedValue = squareMeters * price;
+  }
+  return mcEstimatorProjectRangeFromValue(calculatedValue);
+}
+
+function mcEstimatorProjectFallback(projectType, qualityLevel, rawSquareMeters) {
+  const squareMeters = Number(rawSquareMeters) || 1;
+  const type = MC_ESTIMATOR_PROJECT_MATRIX[projectType] || MC_ESTIMATOR_PROJECT_MATRIX.bano;
+  const price = type.prices?.[qualityLevel] ?? type.prices.estandar;
+  const calculatedValue = type.mode === "BASE_PLUS_INCREMENT"
+    ? Number(price?.base || 4_200)
+    : Math.max(1, squareMeters) * Number(price || 220);
+  return mcEstimatorProjectRangeFromValue(calculatedValue);
+}
+
+function mcEstimatorEnsureBudgetInput(form) {
+  let budget = form.querySelector('input[name="budgetEuros"]');
+  if (budget?.type === "hidden") return budget;
+  const hidden = document.createElement("input");
+  hidden.type = "hidden";
+  hidden.name = "budgetEuros";
+  hidden.dataset.mcCalculatedBudget = "true";
+  if (budget) {
+    const label = budget.closest("label");
+    if (label) label.replaceWith(hidden);
+    else budget.replaceWith(hidden);
+  } else {
+    form.querySelector(".form-actions")?.before(hidden);
+  }
+  return hidden;
+}
+
+function mcEstimatorProjectCard(form) {
+  let card = form.querySelector(".mc-estimate-card");
+  if (card) return card;
+  const existing = form.querySelector("#estimate-result");
+  if (existing) {
+    existing.classList.add("mc-estimate-card");
+    card = existing;
+  } else {
+    card = document.createElement("div");
+    card.className = "mc-estimate-card";
+    form.querySelector(".form-actions")?.before(card);
+  }
+  return card;
+}
+
+function mcEstimatorRenderProjectRange(card, hiddenBudget, range) {
+  if (hiddenBudget) hiddenBudget.value = String(range.realistic);
+  card.dataset.state = "ready";
+  card.innerHTML = `<span>Estimación MiConstructor:</span><strong>${MC_ESTIMATOR_CURRENCY.format(range.minimum)} – ${MC_ESTIMATOR_CURRENCY.format(range.maximum)}</strong><small>${MC_ESTIMATOR_DISCLAIMER}</small>`;
+}
+
+function mcEstimatorSetupProject(form) {
+  if (!form || form.dataset.mcProjectSync === "true") return;
+  form.dataset.mcProjectEstimate = "true";
+  form.dataset.mcProjectSync = "true";
+  const hiddenBudget = mcEstimatorEnsureBudgetInput(form);
+  form.querySelector("#estimate")?.remove();
+  const card = mcEstimatorProjectCard(form);
+  const submit = form.querySelector('.form-actions button:not([type="button"]), .form-actions button.primary');
+
+  const calculate = () => {
+    const projectType = String(form.elements.projectType?.value || "");
+    const qualityLevel = String(form.elements.qualityLevel?.value || "");
+    const squareMeters = Number(form.elements.squareMeters?.value) || 0;
+    if (!projectType || !qualityLevel || squareMeters <= 0) {
+      if (hiddenBudget) hiddenBudget.value = "";
+      card.dataset.state = "pending";
+      card.innerHTML = "<span>Estimación MiConstructor</span><strong>Completa tipo de obra, superficie y calidad.</strong>";
+      if (submit) submit.disabled = true;
+      return;
+    }
+
+    let range;
+    try {
+      range = mcEstimatorCalculateProjectRange(projectType, qualityLevel, squareMeters);
+    } catch {
+      range = mcEstimatorProjectFallback(projectType, qualityLevel, squareMeters);
+    }
+    mcEstimatorRenderProjectRange(card, hiddenBudget, range);
+    if (submit) submit.disabled = false;
+  };
+
+  ["projectType", "squareMeters", "qualityLevel"].forEach((name) => {
+    form.elements[name]?.addEventListener("input", calculate);
+    form.elements[name]?.addEventListener("change", calculate);
+  });
+  calculate();
+}
+
 function mcEstimatorFormatHomeRange(range) {
   return `${MC_ESTIMATOR_CURRENCY.format(Number(range?.minimum || 0) / 100)} – ${MC_ESTIMATOR_CURRENCY.format(Number(range?.maximum || 0) / 100)}`;
 }
@@ -131,7 +275,10 @@ function mcEstimatorPresentResults(form) {
 }
 
 function mcEstimatorEnhance(root = document) {
-  root.querySelectorAll('select[name="projectType"]').forEach(mcEstimatorNormalizeProjectSelect);
+  root.querySelectorAll('select[name="projectType"]').forEach((select) => {
+    mcEstimatorNormalizeProjectSelect(select);
+    mcEstimatorSetupProject(select.form);
+  });
   root.querySelectorAll('select[name="qualityLevel"]').forEach(mcEstimatorNormalizeQuality);
   root.querySelectorAll("form").forEach((form) => mcEstimatorPresentResults(form));
 }
