@@ -136,33 +136,30 @@ function mcEstimatorProjectRangeFromValue(value) {
 }
 
 function mcEstimatorCalculateProjectRange(projectType, qualityLevel, rawSquareMeters) {
-  const squareMeters = Number(rawSquareMeters) || 0;
+  const squareMeters = Number.parseFloat(String(rawSquareMeters ?? ""));
   const type = MC_ESTIMATOR_PROJECT_MATRIX[projectType];
   const price = type?.prices?.[qualityLevel];
-  if (!type || price == null || squareMeters <= 0) throw new Error("invalid_estimator_input");
+  if (!type || price == null || Number.isNaN(squareMeters) || squareMeters <= 0) throw new Error("invalid_estimator_input");
 
-  let calculatedValue = 0;
-  if (type.mode === "BASE_PLUS_INCREMENT") {
-    const extraSquareMeters = Math.max(0, squareMeters - type.standardArea);
-    calculatedValue = price.base + extraSquareMeters * price.incrementPerExtraSquareMeter;
-  } else {
-    calculatedValue = squareMeters * price;
-  }
+  const calculatedValue = type.mode === "BASE_PLUS_INCREMENT"
+    ? price.base + Math.max(0, squareMeters - type.standardArea) * price.incrementPerExtraSquareMeter
+    : squareMeters * price;
   return mcEstimatorProjectRangeFromValue(calculatedValue);
 }
 
 function mcEstimatorProjectFallback(projectType, qualityLevel, rawSquareMeters) {
-  const squareMeters = Number(rawSquareMeters) || 1;
+  const parsedSquareMeters = Number.parseFloat(String(rawSquareMeters ?? ""));
+  const squareMeters = Number.isNaN(parsedSquareMeters) || parsedSquareMeters <= 0 ? 1 : parsedSquareMeters;
   const type = MC_ESTIMATOR_PROJECT_MATRIX[projectType] || MC_ESTIMATOR_PROJECT_MATRIX.bano;
   const price = type.prices?.[qualityLevel] ?? type.prices.estandar;
   const calculatedValue = type.mode === "BASE_PLUS_INCREMENT"
     ? Number(price?.base || 4_200)
-    : Math.max(1, squareMeters) * Number(price || 220);
+    : squareMeters * Number(price || 220);
   return mcEstimatorProjectRangeFromValue(calculatedValue);
 }
 
 function mcEstimatorEnsureBudgetInput(form) {
-  let budget = form.querySelector('input[name="budgetEuros"]');
+  const budget = form.querySelector('input[name="budgetEuros"]');
   if (budget?.type === "hidden") return budget;
   const hidden = document.createElement("input");
   hidden.type = "hidden";
@@ -193,10 +190,18 @@ function mcEstimatorProjectCard(form) {
   return card;
 }
 
-function mcEstimatorRenderProjectRange(card, hiddenBudget, range) {
+function mcEstimatorRenderProjectPending(card, hiddenBudget, submit) {
+  if (hiddenBudget) hiddenBudget.value = "";
+  card.dataset.state = "pending";
+  card.innerHTML = "<span>Estimación MiConstructor</span><strong>Completa tipo de obra, superficie y calidad.</strong>";
+  if (submit) submit.disabled = true;
+}
+
+function mcEstimatorRenderProjectRange(card, hiddenBudget, submit, range) {
   if (hiddenBudget) hiddenBudget.value = String(range.realistic);
   card.dataset.state = "ready";
   card.innerHTML = `<span>Estimación MiConstructor:</span><strong>${MC_ESTIMATOR_CURRENCY.format(range.minimum)} – ${MC_ESTIMATOR_CURRENCY.format(range.maximum)}</strong><small>${MC_ESTIMATOR_DISCLAIMER}</small>`;
+  if (submit) submit.disabled = false;
 }
 
 function mcEstimatorSetupProject(form) {
@@ -211,29 +216,34 @@ function mcEstimatorSetupProject(form) {
   const calculate = () => {
     const projectType = String(form.elements.projectType?.value || "");
     const qualityLevel = String(form.elements.qualityLevel?.value || "");
-    const squareMeters = Number(form.elements.squareMeters?.value) || 0;
-    if (!projectType || !qualityLevel || squareMeters <= 0) {
-      if (hiddenBudget) hiddenBudget.value = "";
-      card.dataset.state = "pending";
-      card.innerHTML = "<span>Estimación MiConstructor</span><strong>Completa tipo de obra, superficie y calidad.</strong>";
-      if (submit) submit.disabled = true;
+    const rawSquareMeters = String(form.elements.squareMeters?.value ?? "").trim();
+    const squareMeters = Number.parseFloat(rawSquareMeters);
+
+    if (!projectType || !qualityLevel || !rawSquareMeters || Number.isNaN(squareMeters) || squareMeters <= 0) {
+      mcEstimatorRenderProjectPending(card, hiddenBudget, submit);
       return;
     }
 
-    let range;
     try {
-      range = mcEstimatorCalculateProjectRange(projectType, qualityLevel, squareMeters);
+      mcEstimatorRenderProjectRange(
+        card,
+        hiddenBudget,
+        submit,
+        mcEstimatorCalculateProjectRange(projectType, qualityLevel, squareMeters),
+      );
     } catch {
-      range = mcEstimatorProjectFallback(projectType, qualityLevel, squareMeters);
+      mcEstimatorRenderProjectRange(
+        card,
+        hiddenBudget,
+        submit,
+        mcEstimatorProjectFallback(projectType, qualityLevel, squareMeters),
+      );
     }
-    mcEstimatorRenderProjectRange(card, hiddenBudget, range);
-    if (submit) submit.disabled = false;
   };
 
-  ["projectType", "squareMeters", "qualityLevel"].forEach((name) => {
-    form.elements[name]?.addEventListener("input", calculate);
-    form.elements[name]?.addEventListener("change", calculate);
-  });
+  form.elements.squareMeters?.addEventListener("input", calculate);
+  form.elements.projectType?.addEventListener("change", calculate);
+  form.elements.qualityLevel?.addEventListener("change", calculate);
   calculate();
 }
 
@@ -249,40 +259,53 @@ function mcEstimatorPeriodLabel(period) {
 }
 
 function mcEstimatorPresentResults(form) {
-  const card = form?.querySelector(".mc-estimate-card[data-state=\"ready\"]");
+  const serviceSlug = String(form?.elements?.serviceSlug?.value || "");
+  if (!serviceSlug) return;
+  const estimate = mcEstimatorResults.get(form);
+  if (!estimate?.range) return;
+  const card = form.querySelector(".mc-estimate-card[data-state=\"ready\"]");
   if (!card) return;
   const small = card.querySelector("small");
   const span = card.querySelector("span");
   const strong = card.querySelector("strong");
-  const serviceSlug = String(form.elements?.serviceSlug?.value || "");
-
-  if (serviceSlug) {
-    const estimate = mcEstimatorResults.get(form);
-    if (!estimate?.range) return;
-    if (span) span.textContent = `Estimación MiConstructor${mcEstimatorPeriodLabel(estimate.pricingPeriod)}`;
-    if (strong) strong.textContent = mcEstimatorFormatHomeRange(estimate.range);
-    if (small) {
-      const annual = estimate.annualizedRange && !estimate.seasonal
-        ? `Referencia anual aproximada: ${mcEstimatorFormatHomeRange(estimate.annualizedRange)}. `
-        : "";
-      small.textContent = `${annual}${MC_ESTIMATOR_DISCLAIMER}`;
-    }
-    return;
+  if (span) span.textContent = `Estimación MiConstructor${mcEstimatorPeriodLabel(estimate.pricingPeriod)}`;
+  if (strong) strong.textContent = mcEstimatorFormatHomeRange(estimate.range);
+  if (small) {
+    const annual = estimate.annualizedRange && !estimate.seasonal
+      ? `Referencia anual aproximada: ${mcEstimatorFormatHomeRange(estimate.annualizedRange)}. `
+      : "";
+    small.textContent = `${annual}${MC_ESTIMATOR_DISCLAIMER}`;
   }
-
-  if (span) span.textContent = "Estimación MiConstructor:";
-  if (small) small.textContent = MC_ESTIMATOR_DISCLAIMER;
 }
 
 function mcEstimatorEnhance(root = document) {
   root.querySelectorAll('select[name="projectType"]').forEach((select) => {
+    const form = select.form;
+    if (!form || form.dataset.mcProjectSync === "true") return;
     mcEstimatorNormalizeProjectSelect(select);
-    mcEstimatorSetupProject(select.form);
+    mcEstimatorNormalizeQuality(form.elements.qualityLevel);
+    mcEstimatorSetupProject(form);
   });
-  root.querySelectorAll('select[name="qualityLevel"]').forEach(mcEstimatorNormalizeQuality);
-  root.querySelectorAll("form").forEach((form) => mcEstimatorPresentResults(form));
+}
+
+function mcEstimatorFindUnboundProjectForm(node) {
+  if (!(node instanceof Element)) return null;
+  const select = node.matches('select[name="projectType"]')
+    ? node
+    : node.querySelector('select[name="projectType"]');
+  const form = select?.form || null;
+  return form && form.dataset.mcProjectSync !== "true" ? form : null;
 }
 
 mcEstimatorEnhance();
-const mcEstimatorObserver = new MutationObserver(() => mcEstimatorEnhance());
+const mcEstimatorObserver = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      const form = mcEstimatorFindUnboundProjectForm(node);
+      if (!form) continue;
+      mcEstimatorEnhance(form);
+      return;
+    }
+  }
+});
 mcEstimatorObserver.observe(document.querySelector("#app") || document.body, { childList: true, subtree: true });
