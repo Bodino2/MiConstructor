@@ -60,6 +60,7 @@
 
   function currentPage(href) {
     if (href === "/guia") return location.pathname.startsWith("/guia");
+    if (href === "/calculadores") return location.pathname === "/calculadores" || location.pathname.startsWith("/calculadora/");
     if (href === "/opiniones") return location.pathname === "/opiniones";
     if (href === "/para-profesionales") return location.pathname === "/para-profesionales" || location.pathname === "/registro-profesional";
     if (href === "/panel") return location.pathname === "/panel";
@@ -94,6 +95,7 @@
           ${serviceNavigationHtml()}
           ${user ? "" : '<a href="/#como-funciona">Cómo funciona</a>'}
           ${shellLink("/guia", "Guía de precios")}
+          ${shellLink("/calculadores", "Calculadoras")}
           ${shellLink("/opiniones", "Opiniones")}
         </div>
         <div class="site-nav-actions">${user ? account : `${shellLink("/para-profesionales", "¿Eres profesional?")}${shellLink("/login", "Entrar")}<a class="site-nav-cta" href="/publicar?servicio=reformas">Pedir presupuesto</a>`}</div>
