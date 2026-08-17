@@ -176,17 +176,26 @@ test("el módulo consolidado es JavaScript válido y elimina el presupuesto edit
   assert.match(matrixUi, /minimum:\s*Math\.round\(realistic \* 0\.85\)/);
   assert.match(matrixUi, /maximum:\s*Math\.round\(realistic \* 1\.15\)/);
   assert.match(matrixUi, /form\.dataset\.mcProjectEstimate = "true"/);
-  assert.match(matrixUi, /const squareMeters = Number\(form\.elements\.squareMeters\?\.value\) \|\| 0/);
-  assert.doesNotMatch(matrixUi, /console\.error/);
+  assert.match(matrixUi, /const squareMeters = Number\.parseFloat\(rawSquareMeters\)/);
+  assert.match(matrixUi, /!rawSquareMeters \|\| Number\.isNaN\(squareMeters\) \|\| squareMeters <= 0/);
+  assert.doesNotMatch(matrixUi, /console\.error|useEffect/);
   assert.doesNotMatch(matrixUi, /Calculando rango orientativo/);
 
   const syncStart = matrixUi.indexOf("function mcEstimatorSetupProject");
   const syncEnd = matrixUi.indexOf("function mcEstimatorFormatHomeRange");
   assert.ok(syncStart >= 0 && syncEnd > syncStart);
   const syncSource = matrixUi.slice(syncStart, syncEnd);
-  assert.doesNotMatch(syncSource, /\basync\b|\bawait\b|\bfetch\s*\(|setTimeout/);
-  assert.match(syncSource, /addEventListener\("input", calculate\)/);
-  assert.match(syncSource, /addEventListener\("change", calculate\)/);
+  assert.doesNotMatch(syncSource, /\basync\b|\bawait\b|\bfetch\s*\(|setTimeout|MutationObserver/);
+  assert.match(syncSource, /form\.elements\.squareMeters\?\.addEventListener\("input", calculate\)/);
+  assert.match(syncSource, /form\.elements\.projectType\?\.addEventListener\("change", calculate\)/);
+  assert.match(syncSource, /form\.elements\.qualityLevel\?\.addEventListener\("change", calculate\)/);
+
+  const observerStart = matrixUi.indexOf("const mcEstimatorObserver = new MutationObserver");
+  assert.ok(observerStart >= 0);
+  const observerSource = matrixUi.slice(observerStart);
+  assert.match(observerSource, /mutation\.addedNodes/);
+  assert.match(observerSource, /mcEstimatorFindUnboundProjectForm/);
+  assert.doesNotMatch(observerSource, /mcEstimatorPresentResults|\.innerHTML\s*=|\.textContent\s*=/);
   assert.match(html, /estimator-matrix-ui\.js[\s\S]*consolidated-ui\.js/);
 });
 
